@@ -21,7 +21,10 @@
   
 ## Installation
 
-To use `sitemapExport`, you'll need [Go](https://golang.org/doc/install) installed.
+### Use the generated binary
+
+### Build from source
+To build `sitemapExport`, you'll need [Go](https://golang.org/doc/install) installed.
 
 1. Clone the repository:
    ```bash
@@ -33,6 +36,10 @@ To use `sitemapExport`, you'll need [Go](https://golang.org/doc/install) install
    ```bash
    go build
    ```
+   However, we can create a smaller binary with this command:
+   ```bash
+   go build -ldflags="-s -w"
+  ```
 
    This will generate the `sitemapExport` binary.
 

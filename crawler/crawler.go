@@ -1,24 +1,14 @@
 package crawler
 
 import (
-	"encoding/xml"
 	"fmt"
-	"io/ioutil"
 	"net/http"
-	"sitemapExport/extractor"
+	"sitemapExport/html2text"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/kennygrant/sanitize"
+	"github.com/russross/blackfriday/v2"
 )
-
-// Sitemap represents the structure of the XML sitemap.
-type Sitemap struct {
-	URLs []SitemapURL `xml:"url"`
-}
-
-// SitemapURL represents each <url> entry in the sitemap.
-type SitemapURL struct {
-	Loc string `xml:"loc"`
-}
 
 // Page represents the extracted data for a single page.
 type Page struct {
@@ -30,7 +20,7 @@ type Page struct {
 }
 
 // CrawlSitemap fetches the sitemap, parses it, and crawls each page to extract content.
-func CrawlSitemap(sitemapURL, cssSelector string) ([]Page, error) {
+func CrawlSitemap(sitemapURL, cssSelector, format string) ([]Page, error) {
 	var pages []Page
 
 	// Fetch the sitemap
@@ -40,41 +30,34 @@ func CrawlSitemap(sitemapURL, cssSelector string) ([]Page, error) {
 	}
 	defer res.Body.Close()
 
-	// Read the sitemap XML
-	sitemapData, err := ioutil.ReadAll(res.Body)
+	// Parse the XML sitemap (assuming standard XML format here)
+	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read sitemap: %w", err)
+		return nil, fmt.Errorf("error parsing sitemap: %w", err)
 	}
 
-	// Parse the XML into Sitemap structure
-	var sitemap Sitemap
-	err = xml.Unmarshal(sitemapData, &sitemap)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse sitemap XML: %w", err)
-	}
-
-	// Loop through each URL in the sitemap and crawl the page
-	for _, sitemapURL := range sitemap.URLs {
-		page, err := extractPage(sitemapURL.Loc, cssSelector)
+	// Loop through each URL and crawl the page
+	doc.Find("url loc").Each(func(i int, s *goquery.Selection) {
+		url := s.Text()
+		page, err := extractPage(url, cssSelector, format)
 		if err != nil {
-			fmt.Printf("Error extracting page %s: %v\n", sitemapURL.Loc, err)
-			continue
+			fmt.Printf("Error extracting page %s: %v\n", url, err)
+			return
 		}
 		pages = append(pages, page)
-	}
+	})
 
 	return pages, nil
 }
 
 // extractPage fetches the page at the given URL and extracts the content based on the CSS selector.
-func extractPage(url, cssSelector string) (Page, error) {
+func extractPage(url, cssSelector, format string) (Page, error) {
 	res, err := http.Get(url)
 	if err != nil {
 		return Page{}, fmt.Errorf("error visiting URL %s: %w", url, err)
 	}
 	defer res.Body.Close()
 
-	// Parse the HTML document from the page
 	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
 		return Page{}, fmt.Errorf("error parsing HTML from %s: %w", url, err)
@@ -89,8 +72,8 @@ func extractPage(url, cssSelector string) (Page, error) {
 		return fmt.Sprintf("%s: %s", name, content)
 	})
 
-	// Extract content based on the provided CSS selector
-	content, err := extractor.ExtractContent(doc, cssSelector)
+	// Extract and transform content based on the format
+	content, err := extractAndTransformContent(doc, cssSelector, format)
 	if err != nil {
 		return Page{}, err
 	}
@@ -102,4 +85,41 @@ func extractPage(url, cssSelector string) (Page, error) {
 		MetaTags:    metaTags,
 		Content:     content,
 	}, nil
+}
+
+// extractAndTransformContent extracts the content and applies the appropriate transformation (HTML, MD, or TXT).
+func extractAndTransformContent(doc *goquery.Document, cssSelector, format string) (string, error) {
+	selection := doc.Find(cssSelector)
+	if selection.Length() == 0 {
+		return "", fmt.Errorf("CSS selector %s not found", cssSelector)
+	}
+
+	content, err := selection.Html()
+	if err != nil {
+		return "", fmt.Errorf("error extracting HTML: %w", err)
+	}
+
+	// Sanitize the HTML
+	sanitizedContent, err := sanitize.HTMLAllowing(content)
+	if err != nil {
+		return "", fmt.Errorf("error sanitizing HTML: %w", err)
+	}
+
+	switch format {
+	case "html":
+		return sanitizedContent, nil
+	case "md":
+		// Convert to Markdown using blackfriday
+		input := []byte(sanitizedContent)
+		return string(blackfriday.Run(input)), nil
+	case "txt":
+		// Convert to plain text
+		textContent, err := html2text.Convert(doc, cssSelector)
+		if err != nil {
+			return "", fmt.Errorf("error converting HTML to text: %w", err)
+		}
+		return textContent, nil
+	default:
+		return "", fmt.Errorf("unsupported format: %s", format)
+	}
 }
