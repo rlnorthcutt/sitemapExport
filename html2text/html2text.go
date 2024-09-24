@@ -2,49 +2,39 @@ package html2text
 
 import (
 	"fmt"
-	"html"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/kennygrant/sanitize"
 )
 
-// html2text converts the HTML content into plain text with custom formatting.
-func Convert(doc *goquery.Document, cssSelector string) (string, error) {
-	// 1. Get the content using the CSS selector
-	selection := doc.Find(cssSelector)
-	if selection.Length() == 0 {
-		return "", fmt.Errorf("CSS selector %s not found", cssSelector)
-	}
-
-	// 2. Sanitize the HTML content using HTMLAllowing with default settings
-	content, err := selection.Html()
-	if err != nil {
-		return "", fmt.Errorf("error extracting HTML: %w", err)
-	}
-	sanitizedContent, err := sanitize.HTMLAllowing(content)
-	if err != nil {
-		return "", fmt.Errorf("error sanitizing HTML: %w", err)
-	}
-
-	// 3. Loop through the content items and apply handleElement to format the text
-	var contentBuilder strings.Builder
-	sanitizedDoc, err := goquery.NewDocumentFromReader(strings.NewReader(sanitizedContent))
+// Convert transforms sanitized HTML content into plain text with custom formatting.
+//
+// @param sanitizedHTML string The sanitized HTML content.
+// @return string The converted plain text content.
+// @return error Any error encountered during the conversion process.
+func Convert(sanitizedHTML string) (string, error) {
+	// 1. Create a new goquery Document from the sanitized HTML
+	sanitizedDoc, err := goquery.NewDocumentFromReader(strings.NewReader(sanitizedHTML))
 	if err != nil {
 		return "", fmt.Errorf("error parsing sanitized HTML: %w", err)
 	}
 
+	// 2. Initialize a builder for collecting the text content
+	var contentBuilder strings.Builder
+
+	// 3. Loop through the contents and apply handleElement for formatting
 	sanitizedDoc.Contents().Each(func(i int, s *goquery.Selection) {
 		handleElement(&contentBuilder, s)
 	})
 
-	// 4. Decode HTML entities (e.g., &#34; -> ")
-	decodedContent := html.UnescapeString(contentBuilder.String())
-
-	return decodedContent, nil
+	return contentBuilder.String(), nil
 }
 
 // handleElement formats different HTML elements as text.
+// This function converts the selected HTML elements into plain text representations.
+//
+// @param contentBuilder *strings.Builder The string builder to append formatted content to.
+// @param s *goquery.Selection The selected HTML element to format.
 func handleElement(contentBuilder *strings.Builder, s *goquery.Selection) {
 	switch goquery.NodeName(s) {
 	case "p":
@@ -67,6 +57,10 @@ func handleElement(contentBuilder *strings.Builder, s *goquery.Selection) {
 }
 
 // handleTableRow formats table rows and cells.
+// Converts table rows into a pipe-separated plain text format.
+//
+// @param contentBuilder *strings.Builder The string builder to append the formatted table content to.
+// @param s *goquery.Selection The selected row element to process.
 func handleTableRow(contentBuilder *strings.Builder, s *goquery.Selection) {
 	s.Find("td, th").Each(func(i int, cell *goquery.Selection) {
 		if i > 0 {
@@ -78,6 +72,10 @@ func handleTableRow(contentBuilder *strings.Builder, s *goquery.Selection) {
 }
 
 // handleAnchor formats <a> tags as "text (URL)".
+// Converts anchor tags to a plain text link format: `text (URL)`.
+//
+// @param contentBuilder *strings.Builder The string builder to append the formatted link to.
+// @param s *goquery.Selection The selected anchor element to process.
 func handleAnchor(contentBuilder *strings.Builder, s *goquery.Selection) {
 	href, exists := s.Attr("href")
 	text := s.Text()
@@ -89,6 +87,10 @@ func handleAnchor(contentBuilder *strings.Builder, s *goquery.Selection) {
 }
 
 // handleImage formats <img> tags as "![alt text](src)" or "Image: (src)".
+// Converts image tags to a plain text format: `![alt](src)` or `Image: (src)`.
+//
+// @param contentBuilder *strings.Builder The string builder to append the formatted image to.
+// @param s *goquery.Selection The selected image element to process.
 func handleImage(contentBuilder *strings.Builder, s *goquery.Selection) {
 	src, srcExists := s.Attr("src")
 	alt, altExists := s.Attr("alt")
