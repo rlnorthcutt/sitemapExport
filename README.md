@@ -68,7 +68,7 @@ This will crawl the provided sitemap, extract content from each page using the C
 If you prefer to pass flags instead of interactive prompts, you can run:
 
 ```bash
-./sitemapExport --sitemap="https://example.com/sitemap.xml" --css="body" --output="output" --format="txt"
+./sitemapExport --url="https://docs.appsmith.com/sitemap.xml" --css=".theme-doc-markdown" --outputName="appsmithDocs" --outputType="txt" --format="md"
 ```
 
 ### Supported Formats
