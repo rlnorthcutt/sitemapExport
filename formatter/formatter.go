@@ -47,9 +47,9 @@ func formatJSONLines(pages []crawler.Page) (string, error) {
 func formatTextBased(pages []crawler.Page) (string, error) {
 	var buffer bytes.Buffer
 	for _, page := range pages {
-		buffer.WriteString(fmt.Sprintf("# %s\n\n", page.Title))
-		buffer.WriteString(fmt.Sprintf("URL: %s\n\n", page.URL))
-		buffer.WriteString(fmt.Sprintf("Description: %s\n\n", page.Description))
+		buffer.WriteString(fmt.Sprintf("# %s\n", page.Title))
+		buffer.WriteString(fmt.Sprintf("URL: %s\n", page.URL))
+		buffer.WriteString(fmt.Sprintf("Description: %s\n", page.Description))
 		buffer.WriteString(fmt.Sprintf("Content:\n%s\n\n", page.Content))
 		buffer.WriteString("\n\n---\n\n")
 	}

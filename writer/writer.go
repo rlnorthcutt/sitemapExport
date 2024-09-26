@@ -3,6 +3,7 @@ package writer
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/jung-kurt/gofpdf"
 )
@@ -36,24 +37,47 @@ func writeTextFile(filepath, content string) error {
 	return nil
 }
 
-// writePDF creates a PDF file from the content.
-func writePDF(filepath, content string) error {
+// writePDF generates a PDF file with the provided content.
+func writePDF(outputPath string, content string) error {
 	pdf := gofpdf.New("P", "mm", "A4", "")
+
+	// Sanitize content: remove unsupported characters or replace with a placeholder
+	content = sanitizeText(content)
+
+	// Add a page
 	pdf.AddPage()
+
+	// Set font and size
 	pdf.SetFont("Arial", "", 12)
 
-	// Break the content into lines to fit into the PDF.
-	lines := pdf.SplitText(content, 190) // 190mm width for A4 page
+	// Split content into chunks that fit the PDF width
+	width := 190.0 // Width in mm for A4 size PDF
+	lines := pdf.SplitText(content, width)
 
+	// Add each line to the PDF
 	for _, line := range lines {
 		pdf.Cell(0, 10, line)
-		pdf.Ln(10) // Newline after each cell
+		pdf.Ln(-1) // Line break
 	}
 
-	err := pdf.OutputFileAndClose(filepath)
+	// Output to file
+	err := pdf.OutputFileAndClose(outputPath)
 	if err != nil {
-		return fmt.Errorf("error writing PDF file %s: %w", filepath, err)
+		return fmt.Errorf("error writing PDF: %w", err)
 	}
 
 	return nil
+}
+
+// sanitizeText ensures that the content doesn't contain any problematic characters.
+func sanitizeText(content string) string {
+	// Remove non-ASCII characters (or replace with a placeholder)
+	sanitized := strings.Map(func(r rune) rune {
+		if r > 127 { // Non-ASCII characters
+			return '?' // Or return -1 to remove the character
+		}
+		return r
+	}, content)
+
+	return sanitized
 }

@@ -29,6 +29,8 @@ func main() {
 	rootCmd.Flags().StringVarP(&outputFiletype, "outputType", "t", "txt", "File output format (txt, json, jsonl, md, pdf)")
 	rootCmd.Flags().StringVarP(&format, "format", "f", "txt", "Content format transformation (html, md, txt)")
 
+	// @TODO: add checks for unsupported flag values to avoid running the command with invalid inputs
+
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
 	}
