@@ -50,8 +50,9 @@ func formatTextBased(pages []crawler.Page) (string, error) {
 		buffer.WriteString(fmt.Sprintf("# %s\n", page.Title))
 		buffer.WriteString(fmt.Sprintf("URL: %s\n", page.URL))
 		buffer.WriteString(fmt.Sprintf("Description: %s\n", page.Description))
-		buffer.WriteString(fmt.Sprintf("Content:\n%s\n\n", page.Content))
-		buffer.WriteString("\n\n---\n\n")
+		buffer.WriteString(fmt.Sprintf("Content:\n%s\n", page.Content))
+		buffer.WriteString("\n\n----------------------------------------------\n")
+		buffer.WriteString("----------------------------------------------\n\n")
 	}
 	return buffer.String(), nil
 }

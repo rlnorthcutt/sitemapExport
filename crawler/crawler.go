@@ -5,9 +5,13 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"net/url"
+	"regexp"
 	"sitemapExport/html2text"
+	"strings"
 
 	md "github.com/JohannesKaufmann/html-to-markdown"
+	"github.com/JohannesKaufmann/html-to-markdown/plugin"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/kennygrant/sanitize"
 )
@@ -36,6 +40,9 @@ type Page struct {
 
 // List of allowed HTML attributes to keep
 var allowedAttributes = []string{"href", "src", "size", "width", "alt", "title", "colspan"}
+
+// List of allowed HTML tags to keep
+var allowedTags = []string{"h1", "h2", "h3", "h4", "h5", "h6", "hr", "p", "br", "b", "i", "strong", "em", "ol", "ul", "li", "a", "img", "pre", "code", "blockquote", "tr", "td", "th", "table"}
 
 // CrawlSitemap fetches the sitemap, parses it, and crawls each page to extract content.
 func CrawlSitemap(sitemapURL, cssSelector, format string) ([]Page, error) {
@@ -112,16 +119,17 @@ func CrawlRSS(rssURL, cssSelector, format string) ([]Page, error) {
 }
 
 // extractPage fetches the page at the given URL and extracts the content based on the CSS selector.
-func extractPage(url, cssSelector, format string) (Page, error) {
-	res, err := http.Get(url)
+// It also ensures that all relative links and image sources are converted to absolute URLs using the hostDomain.
+func extractPage(pageURL, cssSelector, format string) (Page, error) {
+	res, err := http.Get(pageURL)
 	if err != nil {
-		return Page{}, fmt.Errorf("error visiting URL %s: %w", url, err)
+		return Page{}, fmt.Errorf("error visiting URL %s: %w", pageURL, err)
 	}
 	defer res.Body.Close()
 
 	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
-		return Page{}, fmt.Errorf("error parsing HTML from %s: %w", url, err)
+		return Page{}, fmt.Errorf("error parsing HTML from %s: %w", pageURL, err)
 	}
 
 	// Extract the title
@@ -139,6 +147,12 @@ func extractPage(url, cssSelector, format string) (Page, error) {
 		metaTags = append(metaTags, tags)
 	}
 
+	// Fix relative URLs for links and images
+	hostDomain, err := getDomainFromURL(pageURL)
+	if err == nil {
+		fixRelativeUrls(doc, hostDomain)
+	}
+
 	// Extract and transform content based on the format
 	content, err := extractAndTransformContent(doc, cssSelector, format)
 	if err != nil {
@@ -148,11 +162,31 @@ func extractPage(url, cssSelector, format string) (Page, error) {
 	// Return the extracted page data
 	return Page{
 		Title:       title,
-		URL:         url,
+		URL:         pageURL,
 		Description: description, // Will be omitted if empty
 		Tags:        metaTags,    // Will be omitted if empty
 		Content:     content,
 	}, nil
+}
+
+// fixRelativeUrls updates all relative links (href) and image sources (src) to absolute URLs based on the hostDomain.
+// It skips any links that are in-page anchors (start with "#").
+func fixRelativeUrls(doc *goquery.Document, hostDomain string) {
+	doc.Find("a").Each(func(i int, s *goquery.Selection) {
+		href, exists := s.Attr("href")
+		if exists && isRelativeURL(href) && !isAnchorLink(href) {
+			absoluteURL := toAbsoluteURL(hostDomain, href)
+			s.SetAttr("href", absoluteURL)
+		}
+	})
+
+	doc.Find("img").Each(func(i int, s *goquery.Selection) {
+		src, exists := s.Attr("src")
+		if exists && isRelativeURL(src) {
+			absoluteURL := toAbsoluteURL(hostDomain, src)
+			s.SetAttr("src", absoluteURL)
+		}
+	})
 }
 
 // extractAndTransformContent extracts the content and applies the appropriate transformation (HTML, MD, or TXT).
@@ -178,12 +212,14 @@ func extractAndTransformContentFromText(content, format string) (string, error) 
 	decodedContent := html.UnescapeString(content)
 
 	// Step 2: Sanitize the HTML and remove unwanted elements
-	sanitizedContent, err := sanitize.HTMLAllowing(decodedContent, allowedAttributes)
+	sanitizedContent, err := sanitize.HTMLAllowing(decodedContent, allowedTags, allowedAttributes)
 	if err != nil {
 		return "", fmt.Errorf("error sanitizing HTML: %w", err)
 	}
+	// Step 3: Remove excess newlines and carriage returns (more than 2)
+	sanitizedContent = removeExcessNewlines(sanitizedContent)
 
-	// Step 3: Handle the content format (HTML, MD, TXT)
+	// Step 4: Handle the content format (HTML, MD, TXT)
 	switch format {
 	case "html":
 		// Return sanitized HTML
@@ -191,6 +227,7 @@ func extractAndTransformContentFromText(content, format string) (string, error) 
 	case "md":
 		// Convert sanitized HTML to Markdown using html-to-markdown
 		converter := md.NewConverter("", true, nil) // Using the correct alias 'md'
+		converter.Use(plugin.Table())
 		mdContent, err := converter.ConvertString(sanitizedContent)
 		if err != nil {
 			return "", fmt.Errorf("error converting HTML to Markdown: %w", err)
@@ -207,4 +244,72 @@ func extractAndTransformContentFromText(content, format string) (string, error) 
 		// Unsupported format
 		return "", fmt.Errorf("unsupported format: %s", format)
 	}
+}
+
+// getDomainFromURL extracts the scheme and host (domain) from the given full URL.
+func getDomainFromURL(pageURL string) (string, error) {
+	parsedURL, err := url.Parse(pageURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid URL: %w", err)
+	}
+
+	// Rebuild the domain as scheme + host (e.g., https://www.example.com)
+	domain := fmt.Sprintf("%s://%s", parsedURL.Scheme, parsedURL.Host)
+	return domain, nil
+}
+
+// isRelativeURL checks if the given URL is a relative URL.
+func isRelativeURL(link string) bool {
+	u, err := url.Parse(link)
+	return err == nil && !u.IsAbs()
+}
+
+// isAnchorLink checks if the given link is an in-page anchor (starts with "#").
+func isAnchorLink(link string) bool {
+	return len(link) > 0 && link[0] == '#'
+}
+
+// toAbsoluteURL converts a relative URL to an absolute URL using the given host.
+func toAbsoluteURL(host, relativeURL string) string {
+	u, err := url.Parse(relativeURL)
+	if err != nil {
+		return relativeURL // Return as-is if parsing fails
+	}
+
+	baseURL, err := url.Parse(host)
+	if err != nil {
+		return relativeURL // Return as-is if base URL parsing fails
+	}
+
+	return baseURL.ResolveReference(u).String()
+}
+
+// removeExcessNewlines reduces multiple consecutive newlines, trims spaces, and collapses multiple spaces.
+func removeExcessNewlines(content string) string {
+	// Step 1: Normalize \r\n and \r to \n
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	content = strings.ReplaceAll(content, "\r", "\n")
+
+	// Step 2: Trim leading/trailing spaces from each line
+	lines := strings.Split(content, "\n")
+	for i := range lines {
+		lines[i] = strings.TrimSpace(lines[i])
+	}
+
+	// Step 3: Join lines back together and collapse multiple spaces to one
+	content = strings.Join(lines, "\n")
+	content = collapseSpaces(content)
+
+	// Step 4: Replace 3 or more consecutive newlines with exactly 2 newlines
+	re := regexp.MustCompile(`\n{3,}`)
+	content = re.ReplaceAllString(content, "\n\n")
+
+	return content
+}
+
+// collapseSpaces reduces multiple spaces within a line to a single space.
+func collapseSpaces(content string) string {
+	// Replace multiple spaces with a single space
+	re := regexp.MustCompile(`\s{2,}`)
+	return re.ReplaceAllString(content, " ")
 }
