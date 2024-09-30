@@ -14,37 +14,35 @@ import (
 	"github.com/JohannesKaufmann/html-to-markdown/plugin"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/kennygrant/sanitize"
+	"github.com/schollz/progressbar/v3"
 )
 
-// RSSItem represents an RSS item with the fields we care about
+// RSSItem represents an RSS item with relevant fields.
 type RSSItem struct {
 	Title       string `xml:"title"`
 	Link        string `xml:"link"`
 	Description string `xml:"description"`
 }
 
-// RSSFeed represents the RSS feed structure
+// RSSFeed represents the structure of an RSS feed.
 type RSSFeed struct {
 	Items []RSSItem `xml:"channel>item"`
 }
 
 // Page represents the extracted data for a single page.
-// The `omitempty` tags will prevent empty fields from being included in the JSON output.
 type Page struct {
 	Title       string   `json:"Title"`
 	URL         string   `json:"URL"`
-	Description string   `json:"Description,omitempty"` // Omits if empty
-	Tags        []string `json:"Tags,omitempty"`        // Omits if empty
+	Description string   `json:"Description,omitempty"`
+	Tags        []string `json:"Tags,omitempty"`
 	Content     string   `json:"Content"`
 }
 
-// List of allowed HTML attributes to keep
+// List of allowed HTML attributes and tags.
 var allowedAttributes = []string{"href", "src", "size", "width", "alt", "title", "colspan"}
-
-// List of allowed HTML tags to keep
 var allowedTags = []string{"h1", "h2", "h3", "h4", "h5", "h6", "hr", "p", "br", "b", "i", "strong", "em", "ol", "ul", "li", "a", "img", "pre", "code", "blockquote", "tr", "td", "th", "table"}
 
-// CrawlSitemap fetches the sitemap, parses it, and crawls each page to extract content.
+// CrawlSitemap fetches and processes a sitemap to extract page content, showing progress.
 func CrawlSitemap(sitemapURL, cssSelector, format string) ([]Page, error) {
 	var pages []Page
 
@@ -55,27 +53,36 @@ func CrawlSitemap(sitemapURL, cssSelector, format string) ([]Page, error) {
 	}
 	defer res.Body.Close()
 
-	// Parse the XML sitemap (assuming standard XML format here)
+	// Parse the XML sitemap
 	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing sitemap: %w", err)
 	}
 
-	// Loop through each URL and crawl the page
-	doc.Find("url loc").Each(func(i int, s *goquery.Selection) {
-		url := s.Text()
-		page, err := extractPage(url, cssSelector, format)
+	// Get the number of URLs for the progress bar
+	urls := doc.Find("url loc")
+	totalURLs := urls.Length()
+
+	// Initialize the progress bar
+	bar := progressbar.NewOptions(totalURLs, progressbar.OptionSetDescription("Fetching sitemap pages"))
+
+	// Extract each URL from the sitemap and crawl the page
+	urls.Each(func(i int, s *goquery.Selection) {
+		pageURL := s.Text()
+		page, err := extractPage(pageURL, cssSelector, format)
 		if err != nil {
-			fmt.Printf("Error extracting page %s: %v\n", url, err)
+			fmt.Printf("Error extracting page %s: %v\n", pageURL, err)
+			bar.Add(1)
 			return
 		}
 		pages = append(pages, page)
+		bar.Add(1) // Increment the progress bar
 	})
 
 	return pages, nil
 }
 
-// CrawlRSS fetches the RSS feed, parses it using encoding/xml, and extracts content.
+// CrawlRSS fetches and processes an RSS feed to extract page content, showing progress.
 func CrawlRSS(rssURL, cssSelector, format string) ([]Page, error) {
 	var pages []Page
 
@@ -86,40 +93,41 @@ func CrawlRSS(rssURL, cssSelector, format string) ([]Page, error) {
 	}
 	defer res.Body.Close()
 
-	// Step 1: Parse the RSS feed using encoding/xml
+	// Parse the RSS feed using encoding/xml
 	var rss RSSFeed
 	decoder := xml.NewDecoder(res.Body)
 	if err := decoder.Decode(&rss); err != nil {
 		return nil, fmt.Errorf("error decoding RSS feed: %w", err)
 	}
 
-	// Step 2: Process each RSS item and use extractPage for each link
+	// Initialize the progress bar
+	totalItems := len(rss.Items)
+	bar := progressbar.NewOptions(totalItems, progressbar.OptionSetDescription("Fetching RSS pages"))
+
+	// Process each RSS item
 	for _, item := range rss.Items {
-		// Check if the link is empty
 		if item.Link == "" {
 			fmt.Println("Error: RSS item missing URL. Skipping item.")
+			bar.Add(1)
 			continue
 		}
-
-		// Extract the page using the URL from the RSS <link> tag
 		page, err := extractPage(item.Link, cssSelector, format)
 		if err != nil {
 			fmt.Printf("Error extracting page %s: %v\n", item.Link, err)
+			bar.Add(1)
 			continue
 		}
 
-		// Set the description from the RSS feed
+		// Set description from the RSS feed
 		page.Description = item.Description
-
-		// Add the page to the result list
 		pages = append(pages, page)
+		bar.Add(1) // Increment the progress bar
 	}
 
 	return pages, nil
 }
 
-// extractPage fetches the page at the given URL and extracts the content based on the CSS selector.
-// It also ensures that all relative links and image sources are converted to absolute URLs using the hostDomain.
+// extractPage fetches a page and extracts its content based on a CSS selector and format.
 func extractPage(pageURL, cssSelector, format string) (Page, error) {
 	res, err := http.Get(pageURL)
 	if err != nil {
@@ -132,101 +140,80 @@ func extractPage(pageURL, cssSelector, format string) (Page, error) {
 		return Page{}, fmt.Errorf("error parsing HTML from %s: %w", pageURL, err)
 	}
 
-	// Extract the title
+	// Extract page details
 	title := doc.Find("title").Text()
-
-	// Conditionally extract the description meta tag
 	description, _ := doc.Find("meta[name=description]").Attr("content")
+	tags, _ := doc.Find("meta[name=tags]").Attr("content")
 
-	// Conditionally extract the "tags" meta tag
-	tags, tagsExists := doc.Find("meta[name=tags]").Attr("content")
-
-	// Prepare a slice for meta tags and add only the ones that exist
 	var metaTags []string
-	if tagsExists && tags != "" {
-		metaTags = append(metaTags, tags)
+	if tags != "" {
+		metaTags = strings.Split(tags, ",")
 	}
 
-	// Fix relative URLs for links and images
-	hostDomain, err := getDomainFromURL(pageURL)
-	if err == nil {
+	// Convert relative URLs to absolute ones
+	if hostDomain, err := getDomainFromURL(pageURL); err == nil {
 		fixRelativeUrls(doc, hostDomain)
 	}
 
-	// Extract and transform content based on the format
+	// Extract and transform content based on format
 	content, err := extractAndTransformContent(doc, cssSelector, format)
 	if err != nil {
 		return Page{}, err
 	}
 
-	// Return the extracted page data
 	return Page{
 		Title:       title,
 		URL:         pageURL,
-		Description: description, // Will be omitted if empty
-		Tags:        metaTags,    // Will be omitted if empty
+		Description: description,
+		Tags:        metaTags,
 		Content:     content,
 	}, nil
 }
 
-// fixRelativeUrls updates all relative links (href) and image sources (src) to absolute URLs based on the hostDomain.
-// It skips any links that are in-page anchors (start with "#").
+// fixRelativeUrls converts relative URLs in links and images to absolute URLs.
 func fixRelativeUrls(doc *goquery.Document, hostDomain string) {
-	doc.Find("a").Each(func(i int, s *goquery.Selection) {
-		href, exists := s.Attr("href")
-		if exists && isRelativeURL(href) && !isAnchorLink(href) {
-			absoluteURL := toAbsoluteURL(hostDomain, href)
-			s.SetAttr("href", absoluteURL)
-		}
-	})
+	convertToAbsolute := func(attr, tag string) {
+		doc.Find(tag).Each(func(i int, s *goquery.Selection) {
+			url, exists := s.Attr(attr)
+			if exists && isRelativeURL(url) && !isAnchorLink(url) {
+				absoluteURL := toAbsoluteURL(hostDomain, url)
+				s.SetAttr(attr, absoluteURL)
+			}
+		})
+	}
 
-	doc.Find("img").Each(func(i int, s *goquery.Selection) {
-		src, exists := s.Attr("src")
-		if exists && isRelativeURL(src) {
-			absoluteURL := toAbsoluteURL(hostDomain, src)
-			s.SetAttr("src", absoluteURL)
-		}
-	})
+	convertToAbsolute("href", "a")  // Convert relative links
+	convertToAbsolute("src", "img") // Convert relative images
 }
 
-// extractAndTransformContent extracts the content and applies the appropriate transformation (HTML, MD, or TXT).
+// extractAndTransformContent extracts content and applies HTML, Markdown, or Text transformations.
 func extractAndTransformContent(doc *goquery.Document, cssSelector, format string) (string, error) {
-	// Find the HTML content using the CSS selector
 	selection := doc.Find(cssSelector)
 	if selection.Length() == 0 {
 		return "", fmt.Errorf("CSS selector %s not found", cssSelector)
 	}
 
-	// Extract the raw HTML content
-	content, err := selection.Html()
+	htmlContent, err := selection.Html()
 	if err != nil {
 		return "", fmt.Errorf("error extracting HTML: %w", err)
 	}
 
-	return extractAndTransformContentFromText(content, format)
+	return extractAndTransformContentFromText(htmlContent, format)
 }
 
-// extractAndTransformContentFromText applies the appropriate transformation (HTML, MD, TXT) to text content.
+// extractAndTransformContentFromText transforms content into HTML, Markdown, or plain text format.
 func extractAndTransformContentFromText(content, format string) (string, error) {
-	// Step 1: Decode HTML entities before sanitization
 	decodedContent := html.UnescapeString(content)
+	sanitizedContent, _ := sanitize.HTMLAllowing(decodedContent, allowedTags, allowedAttributes)
 
-	// Step 2: Sanitize the HTML and remove unwanted elements
-	sanitizedContent, err := sanitize.HTMLAllowing(decodedContent, allowedTags, allowedAttributes)
-	if err != nil {
-		return "", fmt.Errorf("error sanitizing HTML: %w", err)
-	}
-	// Step 3: Remove excess newlines and carriage returns (more than 2)
+	// Clean up excess newlines
 	sanitizedContent = removeExcessNewlines(sanitizedContent)
 
-	// Step 4: Handle the content format (HTML, MD, TXT)
 	switch format {
 	case "html":
-		// Return sanitized HTML
 		return sanitizedContent, nil
 	case "md":
-		// Convert sanitized HTML to Markdown using html-to-markdown
-		converter := md.NewConverter("", true, nil) // Using the correct alias 'md'
+		converter := md.NewConverter("", true, nil)
 		converter.Use(plugin.Table())
 		mdContent, err := converter.ConvertString(sanitizedContent)
 		if err != nil {
@@ -234,34 +221,45 @@ func extractAndTransformContentFromText(content, format string) (string, error) 
 		}
 		return mdContent, nil
 	case "txt":
-		// Convert to plain text using the html2text package
 		textContent, err := html2text.Convert(sanitizedContent)
 		if err != nil {
 			return "", fmt.Errorf("error converting HTML to text: %w", err)
 		}
 		return textContent, nil
 	default:
-		// Unsupported format
 		return "", fmt.Errorf("unsupported format: %s", format)
 	}
 }
 
-// getDomainFromURL extracts the scheme and host (domain) from the given full URL.
+// getDomainFromURL extracts the scheme and host from the given URL.
 func getDomainFromURL(pageURL string) (string, error) {
 	parsedURL, err := url.Parse(pageURL)
 	if err != nil {
 		return "", fmt.Errorf("invalid URL: %w", err)
 	}
 
-	// Rebuild the domain as scheme + host (e.g., https://www.example.com)
-	domain := fmt.Sprintf("%s://%s", parsedURL.Scheme, parsedURL.Host)
-	return domain, nil
+	return fmt.Sprintf("%s://%s", parsedURL.Scheme, parsedURL.Host), nil
 }
 
-// isRelativeURL checks if the given URL is a relative URL.
+// isRelativeURL checks if the provided URL is relative.
 func isRelativeURL(link string) bool {
 	u, err := url.Parse(link)
 	return err == nil && !u.IsAbs()
+}
+
+// toAbsoluteURL converts a relative URL to an absolute URL.
+func toAbsoluteURL(host, relativeURL string) string {
+	u, err := url.Parse(relativeURL)
+	if err != nil {
+		return relativeURL
+	}
+
+	baseURL, err := url.Parse(host)
+	if err != nil {
+		return relativeURL
+	}
+
+	return baseURL.ResolveReference(u).String()
 }
 
 // isAnchorLink checks if the given link is an in-page anchor (starts with "#").
@@ -269,47 +267,17 @@ func isAnchorLink(link string) bool {
 	return len(link) > 0 && link[0] == '#'
 }
 
-// toAbsoluteURL converts a relative URL to an absolute URL using the given host.
-func toAbsoluteURL(host, relativeURL string) string {
-	u, err := url.Parse(relativeURL)
-	if err != nil {
-		return relativeURL // Return as-is if parsing fails
-	}
-
-	baseURL, err := url.Parse(host)
-	if err != nil {
-		return relativeURL // Return as-is if base URL parsing fails
-	}
-
-	return baseURL.ResolveReference(u).String()
-}
-
-// removeExcessNewlines reduces multiple consecutive newlines, trims spaces, and collapses multiple spaces.
+// removeExcessNewlines normalizes line breaks and removes unnecessary newlines.
 func removeExcessNewlines(content string) string {
-	// Step 1: Normalize \r\n and \r to \n
 	content = strings.ReplaceAll(content, "\r\n", "\n")
 	content = strings.ReplaceAll(content, "\r", "\n")
-
-	// Step 2: Trim leading/trailing spaces from each line
-	lines := strings.Split(content, "\n")
-	for i := range lines {
-		lines[i] = strings.TrimSpace(lines[i])
-	}
-
-	// Step 3: Join lines back together and collapse multiple spaces to one
-	content = strings.Join(lines, "\n")
 	content = collapseSpaces(content)
-
-	// Step 4: Replace 3 or more consecutive newlines with exactly 2 newlines
 	re := regexp.MustCompile(`\n{3,}`)
-	content = re.ReplaceAllString(content, "\n\n")
-
-	return content
+	return re.ReplaceAllString(content, "\n\n")
 }
 
-// collapseSpaces reduces multiple spaces within a line to a single space.
+// collapseSpaces reduces multiple spaces within text to a single space.
 func collapseSpaces(content string) string {
-	// Replace multiple spaces with a single space
 	re := regexp.MustCompile(`\s{2,}`)
 	return re.ReplaceAllString(content, " ")
 }

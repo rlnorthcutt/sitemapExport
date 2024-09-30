@@ -8,83 +8,68 @@ import (
 )
 
 // Convert transforms sanitized HTML content into plain text with custom formatting.
-// It also removes all line breaks in the input HTML before processing.
+// It removes all line breaks in the input HTML before processing.
 //
-// @param sanitizedHTML string The sanitized HTML content.
-// @return string The converted plain text content.
-// @return error Any error encountered during the conversion process.
+// Convert returns the plain text content and an error if encountered.
 func Convert(sanitizedHTML string) (string, error) {
-	// 1. Create a new goquery Document from the cleaned HTML
+	// Create a new goquery Document from the cleaned HTML
 	sanitizedDoc, err := goquery.NewDocumentFromReader(strings.NewReader(sanitizedHTML))
 	if err != nil {
 		return "", fmt.Errorf("error parsing sanitized HTML: %w", err)
 	}
 
-	// 2. Initialize a builder for collecting the text content
+	// Initialize a builder for collecting the text content
 	var contentBuilder strings.Builder
 
-	// 3. Loop through the contents and apply handleElement for formatting
-	// Note: goquery adds a <html> and <head> tag, so we start from the <body>
+	// Process contents starting from the <body> tag
 	sanitizedDoc.Find("body").Contents().Each(func(i int, s *goquery.Selection) {
-		handleElement(&contentBuilder, s, 0) // Start at root level with no indentation
+		handleElement(&contentBuilder, s, 0)
 	})
 
 	return contentBuilder.String(), nil
 }
 
-// handleElement formats different HTML elements as text, supporting nested lists and tables.
-// This function converts the selected HTML elements into plain text representations.
+// handleElement formats different HTML elements into plain text.
 //
-// @param contentBuilder *strings.Builder The string builder to append formatted content to.
-// @param s *goquery.Selection The selected HTML element to format.
-// @param indent int The indentation level for nested elements, automatically increases with recursion.
+// contentBuilder appends formatted content, and indent tracks the depth for nested elements.
 func handleElement(contentBuilder *strings.Builder, s *goquery.Selection, indent int) {
 	tagName := goquery.NodeName(s)
 
-	// Remove line breaks for non-preformatted elements
+	// Extract text and clean line breaks for non-preformatted elements
 	text := s.Text()
 	if tagName != "pre" {
 		text = strings.ReplaceAll(text, "\n", "")
 		text = strings.ReplaceAll(text, "\r", "")
 	}
 
-	// Handle different HTML tags
+	// Format based on the tag name
 	switch tagName {
 	case "h1", "h2", "h3", "h4", "h5", "h6":
-		// Handle headings with underlines
-		contentBuilder.WriteString(fmt.Sprintf("\n"))
-		contentBuilder.WriteString(fmt.Sprintf("\n%s\n", text))
-		contentBuilder.WriteString(fmt.Sprintf("%s\n", strings.Repeat("-", len(text))))
+		contentBuilder.WriteString("\n" + text + "\n" + strings.Repeat("-", len(text)) + "\n")
 	case "p":
-		contentBuilder.WriteString(text + "\n\n") // Paragraphs with double line breaks
+		contentBuilder.WriteString(text + "\n\n")
 	case "ul":
-		// Handle unordered list
-		handleList(contentBuilder, s, indent, false) // Pass false for unordered lists (dashes)
+		handleList(contentBuilder, s, indent, false)
 	case "ol":
-		// Handle ordered list
-		handleList(contentBuilder, s, indent, true) // Pass true for ordered lists (numbers)
+		handleList(contentBuilder, s, indent, true)
 	case "li":
 		// List items are handled in handleList
 	case "br":
-		contentBuilder.WriteString("\n") // Handle <br> as a line break
+		contentBuilder.WriteString("\n")
 	case "table":
-		// Handle table as an element and skip default text processing
 		handleTable(contentBuilder, s)
-		return // Prevent further text processing for table content
+		return
 	case "a":
-		handleAnchor(contentBuilder, s) // Handle <a> tags
+		handleAnchor(contentBuilder, s)
 	case "img":
-		handleImage(contentBuilder, s) // Handle <img> tags
+		handleImage(contentBuilder, s)
 	case "pre":
-		// Preserve formatting and line breaks for preformatted text
-		contentBuilder.WriteString("CODE:\n")
-		contentBuilder.WriteString(s.Text() + "\n")
+		contentBuilder.WriteString("CODE:\n" + s.Text() + "\n")
 	default:
-		// Default handling for other tags
 		contentBuilder.WriteString(text)
 	}
 
-	// Continue recursively handling child elements, skipping "pre" elements since we want their text unchanged
+	// Recursively process child elements, skipping <pre>, <table>, <ul>, and <ol>
 	if tagName != "pre" && tagName != "table" && tagName != "ul" && tagName != "ol" {
 		s.Children().Each(func(i int, child *goquery.Selection) {
 			handleElement(contentBuilder, child, indent)
@@ -92,119 +77,98 @@ func handleElement(contentBuilder *strings.Builder, s *goquery.Selection, indent
 	}
 }
 
-// handleTable processes tables and formats them as text with rows and pipe-separated columns.
+// handleList processes ordered and unordered lists.
 //
-// @param contentBuilder *strings.Builder The string builder to append the formatted table content to.
-// @param s *goquery.Selection The selected table element to process.
-func handleTable(contentBuilder *strings.Builder, s *goquery.Selection) {
-	s.Find("tr").Each(func(i int, row *goquery.Selection) {
-		handleTableRow(contentBuilder, row)
-		contentBuilder.WriteString("\n") // Add a line break after each row
-	})
-	contentBuilder.WriteString("\n") // Add an extra line break after the table
-}
-
-// handleTableRow formats table rows and cells.
-// Converts table rows into a pipe-separated plain text format.
-//
-// @param contentBuilder *strings.Builder The string builder to append the formatted table content to.
-// @param s *goquery.Selection The selected row element to process.
-func handleTableRow(contentBuilder *strings.Builder, s *goquery.Selection) {
-	first := true
-	s.Children().Each(func(i int, cell *goquery.Selection) {
-		if !first {
-			contentBuilder.WriteString(" | ") // Add separator for each cell
-		}
-		handleTableCell(contentBuilder, cell) // Process each cell
-		first = false
-	})
-}
-
-// handleTableCell processes individual table cells (td and th).
-//
-// @param contentBuilder *strings.Builder The string builder to append the formatted cell content to.
-// @param s *goquery.Selection The selected cell element (td or th) to process.
-func handleTableCell(contentBuilder *strings.Builder, s *goquery.Selection) {
-	contentBuilder.WriteString(strings.TrimSpace(s.Text()))
-}
-
-// handleList processes both ordered and unordered lists.
-// If isOrdered is true, it will render numbers, otherwise dashes.
-// @param contentBuilder *strings.Builder The string builder to append formatted content to.
-// @param s *goquery.Selection The selected HTML element to format.
-// @param indent int The indentation level for nested elements, automatically increases with recursion.
-// @param isOrdered bool Determines whether to render a numbered list (true) or unordered list (false).
+// If isOrdered is true, it formats an ordered list; otherwise, it formats an unordered list.
 func handleList(contentBuilder *strings.Builder, s *goquery.Selection, indent int, isOrdered bool) {
-	count := 1 // For numbering ordered lists
+	count := 1
+	indentStr := strings.Repeat("   ", indent)
 
 	s.Children().Each(func(i int, child *goquery.Selection) {
 		if goquery.NodeName(child) == "li" {
-			// Add the appropriate prefix (dash or number) based on list type
 			if isOrdered {
-				contentBuilder.WriteString(fmt.Sprintf("%s%d. ", strings.Repeat("   ", indent), count)) // Write the list prefix (numbered or dashed)
+				contentBuilder.WriteString(fmt.Sprintf("%s%d. ", indentStr, count))
 				count++
 			} else {
-				contentBuilder.WriteString(fmt.Sprintf("%s- ", strings.Repeat("   ", indent))) // Write the list prefix (dashed)
+				contentBuilder.WriteString(indentStr + "- ")
 			}
 
-			// Process all inline contents inside the <li> (excluding nested lists)
+			// Process non-list child elements inside <li>
 			child.Contents().Each(func(j int, nestedChild *goquery.Selection) {
-				// Only process non-list elements here (like text, links, etc.)
 				if goquery.NodeName(nestedChild) != "ul" && goquery.NodeName(nestedChild) != "ol" {
-					handleElement(contentBuilder, nestedChild, indent) // Process inline elements within <li>
+					handleElement(contentBuilder, nestedChild, indent)
 				}
 			})
 
-			contentBuilder.WriteString("\n") // Add a line break after each list item
+			contentBuilder.WriteString("\n")
 
-			// Now, handle any nested lists inside the current list item
+			// Recursively process any nested lists inside <li>
 			child.Children().Each(func(j int, nestedChild *goquery.Selection) {
 				switch goquery.NodeName(nestedChild) {
 				case "ul":
-					handleList(contentBuilder, nestedChild, indent+1, false) // Unordered list
+					handleList(contentBuilder, nestedChild, indent+1, false)
 				case "ol":
-					handleList(contentBuilder, nestedChild, indent+1, true) // Ordered list
+					handleList(contentBuilder, nestedChild, indent+1, true)
 				}
 			})
 		}
 	})
 
-	// If this is the last list item, add an extra line break
-	if contentBuilder.Len() > 0 && strings.HasSuffix(contentBuilder.String(), "\n") && indent == 0 {
+	// Add an extra line break after the list if needed
+	if indent == 0 && !strings.HasSuffix(contentBuilder.String(), "\n\n") {
 		contentBuilder.WriteString("\n")
 	}
 }
 
+// handleTable formats table elements as plain text with pipe-separated rows.
+func handleTable(contentBuilder *strings.Builder, s *goquery.Selection) {
+	s.Find("tr").Each(func(i int, row *goquery.Selection) {
+		handleTableRow(contentBuilder, row)
+		contentBuilder.WriteString("\n")
+	})
+	contentBuilder.WriteString("\n") // Extra line break after the table
+}
+
+// handleTableRow formats a table row.
+func handleTableRow(contentBuilder *strings.Builder, s *goquery.Selection) {
+	first := true
+	s.Children().Each(func(i int, cell *goquery.Selection) {
+		if !first {
+			contentBuilder.WriteString(" | ")
+		}
+		handleTableCell(contentBuilder, cell)
+		first = false
+	})
+}
+
+// handleTableCell formats table cells as plain text.
+func handleTableCell(contentBuilder *strings.Builder, s *goquery.Selection) {
+	contentBuilder.WriteString(strings.TrimSpace(s.Text()))
+}
+
 // handleAnchor formats <a> tags as "text (URL)".
-// Converts anchor tags to a plain text link format: `text (URL)`.
-//
-// @param contentBuilder *strings.Builder The string builder to append the formatted link to.
-// @param s *goquery.Selection The selected anchor element to process.
 func handleAnchor(contentBuilder *strings.Builder, s *goquery.Selection) {
 	href, exists := s.Attr("href")
 	text := s.Text()
 
-	// If href exists and doesn't start with "#", include the link; otherwise, just output the text
 	if exists && !strings.HasPrefix(href, "#") {
-		contentBuilder.WriteString(fmt.Sprintf("%s (%s) ", text, href)) // Output "text (URL)"
+		contentBuilder.WriteString(text + " (" + href + ") ")
 	} else {
-		contentBuilder.WriteString(text) // Output just the text if no href or href starts with "#"
+		contentBuilder.WriteString(text)
 	}
 }
 
-// handleImage formats <img> tags as "![alt text](src)" or "Image: (src)".
-// Converts image tags to a plain text format: `![alt](src)` or `Image: (src)`.
-//
-// @param contentBuilder *strings.Builder The string builder to append the formatted image to.
-// @param s *goquery.Selection The selected image element to process.
+// handleImage formats <img> tags as "Image: alt (src)" or "Image: (src)".
 func handleImage(contentBuilder *strings.Builder, s *goquery.Selection) {
 	src, srcExists := s.Attr("src")
 	alt, altExists := s.Attr("alt")
 
-	if srcExists && altExists {
-		contentBuilder.WriteString(fmt.Sprintf("\nImage: %s (%s)\n", alt, src)) // Markdown-like format for images
-	} else if srcExists {
-		contentBuilder.WriteString(fmt.Sprintf("\nImage: (%s)\n", src)) // Handle images with no alt text
+	if srcExists {
+		if altExists {
+			contentBuilder.WriteString(fmt.Sprintf("\nImage: %s (%s)\n", alt, src))
+		} else {
+			contentBuilder.WriteString(fmt.Sprintf("\nImage: (%s)\n", src))
+		}
+		contentBuilder.WriteString("\n")
 	}
-	contentBuilder.WriteString("\n") // Add a line break after each image
 }

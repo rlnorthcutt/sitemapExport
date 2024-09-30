@@ -8,29 +8,29 @@ import (
 	"github.com/jung-kurt/gofpdf"
 )
 
-// WriteToFile handles writing formatted content to a file based on the selected format.
+// WriteToFile writes formatted content to a file based on the selected format.
 func WriteToFile(filename, content, format string) error {
+	filepath := filename + "." + format
+
 	switch format {
 	case "txt", "md", "json", "jsonl":
-		return writeTextFile(filename+"."+format, content)
+		return writeTextFile(filepath, content)
 	case "pdf":
-		return writePDF(filename+".pdf", content)
+		return writePDF(filepath, content)
 	default:
 		return fmt.Errorf("unsupported file format: %s", format)
 	}
 }
 
-// writeTextFile writes the content as a plain text, markdown, or JSON file.
+// writeTextFile writes content as plain text, markdown, or JSON file.
 func writeTextFile(filepath, content string) error {
-	// Write the content to the file as plain text (or JSON or markdown).
 	file, err := os.Create(filepath)
 	if err != nil {
 		return fmt.Errorf("error creating file %s: %w", filepath, err)
 	}
 	defer file.Close()
 
-	_, err = file.WriteString(content)
-	if err != nil {
+	if _, err = file.WriteString(content); err != nil {
 		return fmt.Errorf("error writing to file %s: %w", filepath, err)
 	}
 
@@ -38,20 +38,22 @@ func writeTextFile(filepath, content string) error {
 }
 
 // writePDF generates a PDF file with the provided content.
-func writePDF(outputPath string, content string) error {
+func writePDF(filepath, content string) error {
 	pdf := gofpdf.New("P", "mm", "A4", "")
 
-	// Sanitize content: remove unsupported characters or replace with a placeholder
-	content = sanitizeText(content)
-
-	// Add a page
+	// Add a page and handle potential errors
 	pdf.AddPage()
 
-	// Set font and size
+	// Set font
 	pdf.SetFont("Arial", "", 12)
 
-	// Split content into chunks that fit the PDF width
-	width := 190.0 // Width in mm for A4 size PDF
+	// Sanitize content by removing unsupported characters
+	content = sanitizeText(content)
+
+	// Define PDF layout width for content fitting
+	width := 190.0 // Effective content width for A4 paper in mm
+
+	// Split content into lines that fit within the width
 	lines := pdf.SplitText(content, width)
 
 	// Add each line to the PDF
@@ -60,24 +62,21 @@ func writePDF(outputPath string, content string) error {
 		pdf.Ln(-1) // Line break
 	}
 
-	// Output to file
-	err := pdf.OutputFileAndClose(outputPath)
-	if err != nil {
-		return fmt.Errorf("error writing PDF: %w", err)
+	// Output the PDF to file and handle errors
+	if err := pdf.OutputFileAndClose(filepath); err != nil {
+		return fmt.Errorf("error writing PDF file: %w", err)
 	}
 
 	return nil
 }
 
-// sanitizeText ensures that the content doesn't contain any problematic characters.
+// sanitizeText removes or replaces non-ASCII characters from the content.
 func sanitizeText(content string) string {
-	// Remove non-ASCII characters (or replace with a placeholder)
-	sanitized := strings.Map(func(r rune) rune {
-		if r > 127 { // Non-ASCII characters
-			return '?' // Or return -1 to remove the character
+	// Replace non-ASCII characters with '?' or remove them
+	return strings.Map(func(r rune) rune {
+		if r > 127 {
+			return -1 // Return -1 if you want to remove non-ASCII characters
 		}
 		return r
 	}, content)
-
-	return sanitized
 }

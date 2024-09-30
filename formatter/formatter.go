@@ -8,24 +8,25 @@ import (
 )
 
 // FormatPages formats pages based on the selected format (json, jsonl, txt, md, pdf).
+// It returns the formatted string or an error if the format is unsupported.
 func FormatPages(pages []crawler.Page, format string) (string, error) {
 	switch format {
 	case "json":
 		return formatJSON(pages)
 	case "jsonl":
 		return formatJSONLines(pages)
-	case "txt", "md", "pdf": // Treat txt, md, and pdf the same
+	case "txt", "md", "pdf": // Text-based formats are handled together
 		return formatTextBased(pages)
 	default:
 		return "", fmt.Errorf("unsupported format: %s", format)
 	}
 }
 
-// formatJSON formats the pages as pretty JSON.
+// formatJSON formats the pages as pretty-printed JSON.
 func formatJSON(pages []crawler.Page) (string, error) {
 	data, err := json.MarshalIndent(pages, "", "  ")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to marshal JSON: %w", err)
 	}
 	return string(data), nil
 }
@@ -36,21 +37,24 @@ func formatJSONLines(pages []crawler.Page) (string, error) {
 	for _, page := range pages {
 		data, err := json.Marshal(page)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to marshal JSON: %w", err)
 		}
-		buffer.WriteString(string(data) + "\n")
+		buffer.Write(data)     // Avoid conversion to string for better performance
+		buffer.WriteByte('\n') // Write new line after each JSON object
 	}
 	return buffer.String(), nil
 }
 
-// formatTextBased formats the pages for txt, md, and pdf as simple text output.
+// formatTextBased formats the pages as text-based output (txt, md, pdf).
+// The same format is used for all these cases as plain text.
 func formatTextBased(pages []crawler.Page) (string, error) {
 	var buffer bytes.Buffer
 	for _, page := range pages {
-		buffer.WriteString(fmt.Sprintf("# %s\n", page.Title))
-		buffer.WriteString(fmt.Sprintf("URL: %s\n", page.URL))
-		buffer.WriteString(fmt.Sprintf("Description: %s\n", page.Description))
-		buffer.WriteString(fmt.Sprintf("Content:\n%s\n", page.Content))
+		// Writing directly to buffer with fmt.Fprint instead of fmt.Sprintf
+		fmt.Fprintf(&buffer, "# %s\n", page.Title)
+		fmt.Fprintf(&buffer, "URL: %s\n", page.URL)
+		fmt.Fprintf(&buffer, "Description: %s\n", page.Description)
+		fmt.Fprintf(&buffer, "Content:\n%s\n", page.Content)
 		buffer.WriteString("\n\n----------------------------------------------\n")
 		buffer.WriteString("----------------------------------------------\n\n")
 	}
