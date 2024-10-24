@@ -2,6 +2,8 @@
 
 `sitemapExport` is a Go-based CLI tool that crawls a sitemap or RSS feed, extracts content from web pages using CSS selectors, and compiles the data into various formats such as `txt`, `json`, `jsonl`, `md`, and `pdf`.
 
+The primary use case is to extract content into a file that can be used as contextual data for AI. For example, extracting your docs site as a simple PDF to power a solid AI support chatbot ([tutorial here](https://community.appsmith.com/tutorial/4-easy-steps-build-ai-powered-support-bot-knows-your-docs)).
+
 ## Features
 
 - Crawl a sitemap or RSS feed to extract content from pages.
