@@ -24,7 +24,7 @@ The primary use case is to extract content into a file that can be used as conte
 ## Installation
 
 ### Easy : Run the command
-1. Just grab the `sitemapExport` file in the repo.
+1. Just grab the [`sitemapExport`](https://github.com/rlnorthcutt/sitemapExport/releases/) file in the repo.
 
 2. Make the file executable, and run
 
