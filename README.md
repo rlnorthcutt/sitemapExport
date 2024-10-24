@@ -21,7 +21,14 @@
 
 ## Installation
 
-### Build from source
+### Easy : Run the command
+1. Just grab the `sitemapExport` file in the repo.
+
+2. Make the file executable, and run
+
+Thats it. Each time the repo is updated, the executable is rebuilt. However, you can always build it from source if you choose.
+
+### Fun : Build from source
 To build `sitemapExport`, you'll need [Go](https://golang.org/doc/install) installed.
 
 1. Clone the repository:
@@ -55,20 +62,21 @@ Once built, you can run the tool from the command line. The tool supports both i
 
 ```bash
 $ ./sitemapExport
-Enter the sitemap URL (required): https://example.com/sitemap.xml
+Enter the Sitemap or RSS feed URL (required): https://example.com/sitemap.xml
 Enter the CSS selector to extract content (default: body):
-Enter the output filename (default: sitemap): output
-Enter the output format (txt, json, jsonl, md, pdf) [default: txt]: jsonl
+Enter the output filename (default: output): output
+Enter the output file type (txt, json, jsonl, md, pdf) (default: txt): jsonl
+Enter the content format (html, md, txt) (default: txt): md
 Successfully saved output to output.jsonl
 ```
 
-This will crawl the provided sitemap, extract content from each page using the CSS selector, and save the output to the chosen format (`jsonl` in this case).
+This will crawl the provided sitemap, extract content from each page using the CSS selector, and save the output in the chosen format (`jsonl` in this case).
 
 ### Command-Line Options (Non-Interactive)
 If you prefer to pass flags instead of interactive prompts, you can run:
 
 ```bash
-./sitemapExport --sitemap="https://example.com/sitemap.xml" --css="body" --output="output" --format="txt"
+./sitemapExport --url="https://example.com/sitemap.xml" --css="body" --filename="output" --type="txt" --format="txt"
 ```
 
 ### Supported Formats
@@ -79,7 +87,7 @@ If you prefer to pass flags instead of interactive prompts, you can run:
 - `md`: Markdown format
 - `pdf`: PDF format
 
-## Example Output
+### Example Output
 
 **JSON Output (`output.json`)**:
 ```json
@@ -135,12 +143,14 @@ Description: Learn more about our company
 ```bash
 sitemapExport/
 ├── main.go           # CLI entry point
-├── crawler/          # Handles sitemap crawling and page extraction
+├── crawler/          # Handles sitemap and RSS crawling and page extraction
 │   └── crawler.go
 ├── formatter/        # Formats extracted content into different file formats
 │   └── formatter.go
 ├── writer/           # Writes formatted content to files (txt, json, md, pdf)
 │   └── writer.go
+├── feed/             # Detects feed type and handles feed-related tasks
+│   └── feed.go
 ├── go.mod            # Go module file with dependencies
 ├── go.sum            # Go module dependency checksum
 └── README.md         # Project documentation
@@ -164,3 +174,4 @@ Feel free to open issues or submit pull requests for new features, bug fixes, or
 ## License
 
 This project is licensed under the MIT License.
+
