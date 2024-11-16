@@ -81,6 +81,12 @@ If you prefer to pass flags instead of interactive prompts, you can run:
 ./sitemapExport --url="https://example.com/sitemap.xml" --css="body" --filename="output" --type="txt" --format="txt"
 ```
 
+Or, use the short flags:
+
+```bash
+./sitemapExport --u="https://example.com/sitemap.xml" --c="body" --n="output" --t="txt" --f="txt"
+```
+
 ### Supported Formats
 
 - `txt`: Plain text format

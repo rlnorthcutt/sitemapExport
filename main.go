@@ -38,7 +38,7 @@ func init() {
 	// Define flags in the init function
 	rootCmd.Flags().StringVarP(&feedURL, "url", "u", "", "Sitemap or RSS feed URL to crawl (required)")
 	rootCmd.Flags().StringVarP(&cssSelector, "css", "c", "body", "CSS selector to extract content (for sitemaps)")
-	rootCmd.Flags().StringVarP(&outputFilename, "filename", "f", "output", "Filename for the output")
+	rootCmd.Flags().StringVarP(&outputFilename, "filename", "n", "output", "Filename for the output")
 	rootCmd.Flags().StringVarP(&outputFiletype, "type", "t", "txt", "File output format (txt, json, jsonl, md, pdf)")
 	rootCmd.Flags().StringVarP(&format, "format", "f", "txt", "Content format transformation (html, md, txt)")
 }
