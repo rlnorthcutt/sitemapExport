@@ -35,7 +35,7 @@ To build `sitemapExport`, you'll need [Go](https://golang.org/doc/install) insta
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/sitemapExport.git
+   git clone https://github.com/rlnorthcutt/sitemapExport.git
    cd sitemapExport
    ```
 
