@@ -4,8 +4,10 @@ import (
 	"encoding/xml"
 	"fmt"
 	"html"
+	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"sitemapExport/html2text"
 	"strings"
@@ -42,19 +44,33 @@ type Page struct {
 var allowedAttributes = []string{"href", "src", "size", "width", "alt", "title", "colspan"}
 var allowedTags = []string{"h1", "h2", "h3", "h4", "h5", "h6", "hr", "p", "br", "b", "i", "strong", "em", "ol", "ul", "li", "a", "img", "pre", "code", "blockquote", "tr", "td", "th", "table"}
 
-// CrawlSitemap fetches and processes a sitemap to extract page content, showing progress.
-func CrawlSitemap(sitemapURL, cssSelector, format string) ([]Page, error) {
+// CrawlSitemap fetches and processes a sitemap from a URL or file to extract page content, showing progress.
+func CrawlSitemap(sitemapSource, cssSelector, format string) ([]Page, error) {
 	var pages []Page
 
-	// Fetch the sitemap
-	res, err := http.Get(sitemapURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch sitemap: %w", err)
+	var (
+		reader io.ReadCloser
+		err    error
+	)
+
+	if strings.HasPrefix(sitemapSource, "http://") || strings.HasPrefix(sitemapSource, "https://") {
+		// Fetch the sitemap from URL
+		res, err := http.Get(sitemapSource)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch sitemap: %w", err)
+		}
+		reader = res.Body
+	} else {
+		// Open sitemap from local file
+		reader, err = os.Open(sitemapSource)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open sitemap file: %w", err)
+		}
 	}
-	defer res.Body.Close()
+	defer reader.Close()
 
 	// Parse the XML sitemap
-	doc, err := goquery.NewDocumentFromReader(res.Body)
+	doc, err := goquery.NewDocumentFromReader(reader)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing sitemap: %w", err)
 	}
@@ -82,20 +98,34 @@ func CrawlSitemap(sitemapURL, cssSelector, format string) ([]Page, error) {
 	return pages, nil
 }
 
-// CrawlRSS fetches and processes an RSS feed to extract page content, showing progress.
-func CrawlRSS(rssURL, cssSelector, format string) ([]Page, error) {
+// CrawlRSS fetches and processes an RSS feed from a URL or file to extract page content, showing progress.
+func CrawlRSS(rssSource, cssSelector, format string) ([]Page, error) {
 	var pages []Page
 
-	// Fetch the RSS feed
-	res, err := http.Get(rssURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch RSS feed: %w", err)
+	var (
+		reader io.ReadCloser
+		err    error
+	)
+
+	if strings.HasPrefix(rssSource, "http://") || strings.HasPrefix(rssSource, "https://") {
+		// Fetch the RSS feed from URL
+		res, err := http.Get(rssSource)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch RSS feed: %w", err)
+		}
+		reader = res.Body
+	} else {
+		// Open RSS feed from local file
+		reader, err = os.Open(rssSource)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open RSS file: %w", err)
+		}
 	}
-	defer res.Body.Close()
+	defer reader.Close()
 
 	// Parse the RSS feed using encoding/xml
 	var rss RSSFeed
-	decoder := xml.NewDecoder(res.Body)
+	decoder := xml.NewDecoder(reader)
 	if err := decoder.Decode(&rss); err != nil {
 		return nil, fmt.Errorf("error decoding RSS feed: %w", err)
 	}

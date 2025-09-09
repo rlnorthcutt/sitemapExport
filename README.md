@@ -64,7 +64,7 @@ Once built, you can run the tool from the command line. The tool supports both i
 
 ```bash
 $ ./sitemapExport
-Enter the Sitemap or RSS feed URL (required): https://example.com/sitemap.xml
+Enter the Sitemap or RSS feed URL or file path (required): https://example.com/sitemap.xml
 Enter the CSS selector to extract content (default: body):
 Enter the output filename (default: output): output
 Enter the output file type (txt, json, jsonl, md, pdf) (default: txt): jsonl
@@ -78,13 +78,13 @@ This will crawl the provided sitemap, extract content from each page using the C
 If you prefer to pass flags instead of interactive prompts, you can run:
 
 ```bash
-./sitemapExport --url="https://example.com/sitemap.xml" --css="body" --filename="output" --type="txt" --format="txt"
+./sitemapExport --input="https://example.com/sitemap.xml" --css="body" --filename="output" --type="txt" --format="txt"
 ```
 
 Or, use the short flags:
 
 ```bash
-./sitemapExport --u="https://example.com/sitemap.xml" --c="body" --n="output" --t="txt" --f="txt"
+./sitemapExport -i="https://example.com/sitemap.xml" -c="body" -n="output" -t="txt" -f="txt"
 ```
 
 ### Supported Formats
