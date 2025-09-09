@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	feedURL        string
+	feedSource     string
 	cssSelector    string
 	outputFilename string
 	outputFiletype string
@@ -36,7 +36,7 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	// Define flags in the init function
-	rootCmd.Flags().StringVarP(&feedURL, "url", "u", "", "Sitemap or RSS feed URL to crawl (required)")
+	rootCmd.Flags().StringVarP(&feedSource, "input", "i", "", "Sitemap or RSS feed URL or file path to crawl (required)")
 	rootCmd.Flags().StringVarP(&cssSelector, "css", "c", "body", "CSS selector to extract content (for sitemaps)")
 	rootCmd.Flags().StringVarP(&outputFilename, "filename", "n", "output", "Filename for the output")
 	rootCmd.Flags().StringVarP(&outputFiletype, "type", "t", "txt", "File output format (txt, json, jsonl, md, pdf)")
@@ -46,9 +46,9 @@ func init() {
 // executeCrawlAndExport prompts the user for missing input (if flags are not provided), validates the inputs, and runs the main export logic.
 func executeCrawlAndExport(cmd *cobra.Command, args []string) {
 	// Prompt for missing user input
-	feedURL = promptUser("Enter the Sitemap or RSS feed URL (required): ", feedURL)
-	if feedURL == "" {
-		handleError("getting feed URL", fmt.Errorf("feed URL is required"))
+	feedSource = promptUser("Enter the Sitemap or RSS feed URL or file path (required): ", feedSource)
+	if feedSource == "" {
+		handleError("getting feed source", fmt.Errorf("feed source is required"))
 	}
 
 	cssSelector = promptUser("Enter the CSS selector to extract content (default: 'body'): ", cssSelector)
@@ -68,7 +68,7 @@ func executeCrawlAndExport(cmd *cobra.Command, args []string) {
 
 	// Confirm the input values with the user before proceeding
 	fmt.Printf("\nExport data with the following settings:\n")
-	fmt.Printf("URL: %s\n", feedURL)
+	fmt.Printf("Input: %s\n", feedSource)
 	fmt.Printf("CSS Selector: %s\n", cssSelector)
 	fmt.Printf("Output Filename: %s\n", outputFilename)
 	fmt.Printf("Output Filetype: %s\n", outputFiletype)
@@ -82,7 +82,7 @@ func executeCrawlAndExport(cmd *cobra.Command, args []string) {
 	fmt.Print("\n")
 
 	// Step 1: Detect if it's an RSS feed or a Sitemap
-	feedType, err := feed.DetectFeedType(feedURL)
+	feedType, err := feed.DetectFeedType(feedSource)
 	handleError("detecting feed type", err)
 
 	// Step 2: Fetch and crawl the pages based on the feed type
@@ -90,11 +90,11 @@ func executeCrawlAndExport(cmd *cobra.Command, args []string) {
 	switch feedType {
 	case "rss":
 		// Crawl RSS feed
-		pages, err = crawler.CrawlRSS(feedURL, cssSelector, format)
+		pages, err = crawler.CrawlRSS(feedSource, cssSelector, format)
 		handleError("crawling RSS feed", err)
 	case "sitemap":
 		// Crawl Sitemap
-		pages, err = crawler.CrawlSitemap(feedURL, cssSelector, format)
+		pages, err = crawler.CrawlSitemap(feedSource, cssSelector, format)
 		handleError("crawling sitemap", err)
 	default:
 		handleError("processing feed", fmt.Errorf("unknown feed type detected"))
