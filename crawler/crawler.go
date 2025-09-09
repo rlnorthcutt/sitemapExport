@@ -45,7 +45,8 @@ var allowedAttributes = []string{"href", "src", "size", "width", "alt", "title",
 var allowedTags = []string{"h1", "h2", "h3", "h4", "h5", "h6", "hr", "p", "br", "b", "i", "strong", "em", "ol", "ul", "li", "a", "img", "pre", "code", "blockquote", "tr", "td", "th", "table"}
 
 // CrawlSitemap fetches and processes a sitemap from a URL or file to extract page content, showing progress.
-func CrawlSitemap(sitemapSource, cssSelector, format string) ([]Page, error) {
+// Only URLs matching the provided filter pattern are included.
+func CrawlSitemap(sitemapSource, cssSelector, format, filter string) ([]Page, error) {
 	var pages []Page
 
 	var (
@@ -85,6 +86,10 @@ func CrawlSitemap(sitemapSource, cssSelector, format string) ([]Page, error) {
 	// Extract each URL from the sitemap and crawl the page
 	urls.Each(func(i int, s *goquery.Selection) {
 		pageURL := s.Text()
+		if !matchesFilter(pageURL, filter) {
+			bar.Add(1)
+			return
+		}
 		page, err := extractPage(pageURL, cssSelector, format)
 		if err != nil {
 			fmt.Printf("Error extracting page %s: %v\n", pageURL, err)
@@ -99,7 +104,8 @@ func CrawlSitemap(sitemapSource, cssSelector, format string) ([]Page, error) {
 }
 
 // CrawlRSS fetches and processes an RSS feed from a URL or file to extract page content, showing progress.
-func CrawlRSS(rssSource, cssSelector, format string) ([]Page, error) {
+// Only URLs matching the provided filter pattern are included.
+func CrawlRSS(rssSource, cssSelector, format, filter string) ([]Page, error) {
 	var pages []Page
 
 	var (
@@ -138,6 +144,10 @@ func CrawlRSS(rssSource, cssSelector, format string) ([]Page, error) {
 	for _, item := range rss.Items {
 		if item.Link == "" {
 			fmt.Println("Error: RSS item missing URL. Skipping item.")
+			bar.Add(1)
+			continue
+		}
+		if !matchesFilter(item.Link, filter) {
 			bar.Add(1)
 			continue
 		}
@@ -310,4 +320,19 @@ func removeExcessNewlines(content string) string {
 func collapseSpaces(content string) string {
 	re := regexp.MustCompile(`\s{2,}`)
 	return re.ReplaceAllString(content, " ")
+}
+
+// matchesFilter checks if a given URL matches the provided filter pattern.
+// The filter supports simple prefix matching with a trailing '*', e.g., "blog/*".
+func matchesFilter(pageURL, filter string) bool {
+	if filter == "" || filter == "*" {
+		return true
+	}
+	parsed, err := url.Parse(pageURL)
+	if err != nil {
+		return false
+	}
+	filter = strings.TrimSuffix(filter, "*")
+	path := strings.TrimPrefix(parsed.Path, "/")
+	return strings.HasPrefix(path, filter)
 }

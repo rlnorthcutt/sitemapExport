@@ -20,6 +20,7 @@ var (
 	outputFilename string
 	outputFiletype string
 	format         string
+	urlFilter      string
 )
 
 func main() {
@@ -41,6 +42,7 @@ func init() {
 	rootCmd.Flags().StringVarP(&outputFilename, "filename", "n", "output", "Filename for the output")
 	rootCmd.Flags().StringVarP(&outputFiletype, "type", "t", "txt", "File output format (txt, json, jsonl, md, pdf)")
 	rootCmd.Flags().StringVarP(&format, "format", "f", "txt", "Content format transformation (html, md, txt)")
+	rootCmd.Flags().StringVar(&urlFilter, "filter", "*", "Only include URLs matching this pattern (e.g., blog/*)")
 }
 
 // executeCrawlAndExport prompts the user for missing input (if flags are not provided), validates the inputs, and runs the main export logic.
@@ -53,6 +55,7 @@ func executeCrawlAndExport(cmd *cobra.Command, args []string) {
 
 	cssSelector = promptUser("Enter the CSS selector to extract content (default: 'body'): ", cssSelector)
 	outputFilename = promptUser("Enter the output filename (default: 'output'): ", outputFilename)
+	urlFilter = promptUser("Enter the URL filter pattern (default: '*'): ", urlFilter)
 
 	// Validate output file type
 	outputFiletype = promptUser("Enter the output file type (txt, json, jsonl, md, pdf) (default: 'txt'): ", outputFiletype)
@@ -60,16 +63,27 @@ func executeCrawlAndExport(cmd *cobra.Command, args []string) {
 		handleError("validating output file type", fmt.Errorf("unsupported output file type: %s", outputFiletype))
 	}
 
-	// Validate content format
-	format = promptUser("Enter the content format (html, md, txt) (default: 'txt'): ", format)
-	if !isValidFormat(format) {
-		handleError("validating content format", fmt.Errorf("unsupported content format: %s", format))
+	if strings.EqualFold(outputFiletype, "pdf") {
+		// Prompt for content format only for PDF output
+		format = promptUser("Enter the content format (html, md, txt) (default: 'txt'): ", format)
+		if !isValidFormat(format) {
+			handleError("validating content format", fmt.Errorf("unsupported content format: %s", format))
+		}
+	} else {
+		// Automatically determine content format for other output types
+		switch strings.ToLower(outputFiletype) {
+		case "md":
+			format = "md"
+		default:
+			format = "txt"
+		}
 	}
 
 	// Confirm the input values with the user before proceeding
 	fmt.Printf("\nExport data with the following settings:\n")
 	fmt.Printf("Input: %s\n", feedSource)
 	fmt.Printf("CSS Selector: %s\n", cssSelector)
+	fmt.Printf("URL Filter: %s\n", urlFilter)
 	fmt.Printf("Output Filename: %s\n", outputFilename)
 	fmt.Printf("Output Filetype: %s\n", outputFiletype)
 	fmt.Printf("Format: %s\n", format)
@@ -90,11 +104,11 @@ func executeCrawlAndExport(cmd *cobra.Command, args []string) {
 	switch feedType {
 	case "rss":
 		// Crawl RSS feed
-		pages, err = crawler.CrawlRSS(feedSource, cssSelector, format)
+		pages, err = crawler.CrawlRSS(feedSource, cssSelector, format, urlFilter)
 		handleError("crawling RSS feed", err)
 	case "sitemap":
 		// Crawl Sitemap
-		pages, err = crawler.CrawlSitemap(feedSource, cssSelector, format)
+		pages, err = crawler.CrawlSitemap(feedSource, cssSelector, format, urlFilter)
 		handleError("crawling sitemap", err)
 	default:
 		handleError("processing feed", fmt.Errorf("unknown feed type detected"))

@@ -8,6 +8,7 @@ The primary use case is to extract content into a file that can be used as conte
 
 - Crawl a sitemap or RSS feed to extract content from pages.
 - Extract page content using a specified CSS selector.
+- Optionally filter URLs with a simple pattern (e.g., `blog/*`).
 - Generate a structured list of pages with:
   - Page title
   - URL
@@ -67,8 +68,8 @@ $ ./sitemapExport
 Enter the Sitemap or RSS feed URL or file path (required): https://example.com/sitemap.xml
 Enter the CSS selector to extract content (default: body):
 Enter the output filename (default: output): output
+Enter the URL filter pattern (default: *):
 Enter the output file type (txt, json, jsonl, md, pdf) (default: txt): jsonl
-Enter the content format (html, md, txt) (default: txt): md
 Successfully saved output to output.jsonl
 ```
 
@@ -78,14 +79,16 @@ This will crawl the provided sitemap, extract content from each page using the C
 If you prefer to pass flags instead of interactive prompts, you can run:
 
 ```bash
-./sitemapExport --input="https://example.com/sitemap.xml" --css="body" --filename="output" --type="txt" --format="txt"
+./sitemapExport --input="https://example.com/sitemap.xml" --css="body" --filename="output" --type="txt" --filter="blog/*"
 ```
 
 Or, use the short flags:
 
 ```bash
-./sitemapExport -i="https://example.com/sitemap.xml" -c="body" -n="output" -t="txt" -f="txt"
+./sitemapExport -i="https://example.com/sitemap.xml" -c="body" -n="output" -t="txt" --filter="blog/*"
 ```
+
+If exporting to PDF, you can also specify `--format` (html, md, txt) to control the content inside the PDF.
 
 ### Supported Formats
 
