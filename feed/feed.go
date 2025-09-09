@@ -7,7 +7,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
+
+	"sitemapExport/crawler"
 )
 
 // DetectFeedType detects whether the provided source is an RSS feed or sitemap
@@ -19,11 +20,8 @@ func DetectFeedType(feedSource string) (string, error) {
 	)
 
 	if strings.HasPrefix(feedSource, "http://") || strings.HasPrefix(feedSource, "https://") {
-		client := &http.Client{
-			Timeout: 10 * time.Second, // Set a timeout to avoid long-running requests
-		}
 		// Fetch the feed URL
-		res, err := client.Get(feedSource)
+		res, err := crawler.Client.Get(feedSource)
 		if err != nil {
 			return "", fmt.Errorf("error fetching URL %s: %w", feedSource, err)
 		}

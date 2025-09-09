@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"html"
 	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"regexp"
@@ -56,7 +55,7 @@ func CrawlSitemap(sitemapSource, cssSelector, format, filter string) ([]Page, er
 
 	if strings.HasPrefix(sitemapSource, "http://") || strings.HasPrefix(sitemapSource, "https://") {
 		// Fetch the sitemap from URL
-		res, err := http.Get(sitemapSource)
+		res, err := Client.Get(sitemapSource)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch sitemap: %w", err)
 		}
@@ -115,7 +114,7 @@ func CrawlRSS(rssSource, cssSelector, format, filter string) ([]Page, error) {
 
 	if strings.HasPrefix(rssSource, "http://") || strings.HasPrefix(rssSource, "https://") {
 		// Fetch the RSS feed from URL
-		res, err := http.Get(rssSource)
+		res, err := Client.Get(rssSource)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch RSS feed: %w", err)
 		}
@@ -169,7 +168,7 @@ func CrawlRSS(rssSource, cssSelector, format, filter string) ([]Page, error) {
 
 // extractPage fetches a page and extracts its content based on a CSS selector and format.
 func extractPage(pageURL, cssSelector, format string) (Page, error) {
-	res, err := http.Get(pageURL)
+	res, err := Client.Get(pageURL)
 	if err != nil {
 		return Page{}, fmt.Errorf("error visiting URL %s: %w", pageURL, err)
 	}
