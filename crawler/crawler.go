@@ -44,6 +44,9 @@ type Page struct {
 var allowedAttributes = []string{"href", "src", "size", "width", "alt", "title", "colspan"}
 var allowedTags = []string{"h1", "h2", "h3", "h4", "h5", "h6", "hr", "p", "br", "b", "i", "strong", "em", "ol", "ul", "li", "a", "img", "pre", "code", "blockquote", "tr", "td", "th", "table"}
 
+var reExcessNewlines = regexp.MustCompile(`\n{3,}`)
+var reCollapseSpaces = regexp.MustCompile(`\s{2,}`)
+
 // CrawlSitemap fetches and processes a sitemap from a URL or file to extract page content, showing progress.
 // Only URLs matching the provided filter pattern are included.
 func CrawlSitemap(sitemapSource, cssSelector, format, filter string) ([]Page, error) {
@@ -312,14 +315,12 @@ func removeExcessNewlines(content string) string {
 	content = strings.ReplaceAll(content, "\r\n", "\n")
 	content = strings.ReplaceAll(content, "\r", "\n")
 	content = collapseSpaces(content)
-	re := regexp.MustCompile(`\n{3,}`)
-	return re.ReplaceAllString(content, "\n\n")
+	return reExcessNewlines.ReplaceAllString(content, "\n\n")
 }
 
 // collapseSpaces reduces multiple spaces within text to a single space.
 func collapseSpaces(content string) string {
-	re := regexp.MustCompile(`\s{2,}`)
-	return re.ReplaceAllString(content, " ")
+	return reCollapseSpaces.ReplaceAllString(content, " ")
 }
 
 // matchesFilter checks if a given URL matches the provided filter pattern.
