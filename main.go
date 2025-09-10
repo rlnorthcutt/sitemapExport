@@ -10,6 +10,7 @@ import (
 	"sitemapExport/formatter"
 	"sitemapExport/writer"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -21,6 +22,8 @@ var (
 	outputFiletype string
 	format         string
 	urlFilter      string
+	timeout        time.Duration
+	userAgent      string
 )
 
 func main() {
@@ -43,6 +46,8 @@ func init() {
 	rootCmd.Flags().StringVarP(&outputFiletype, "type", "t", "txt", "File output format (txt, json, jsonl, md, pdf)")
 	rootCmd.Flags().StringVarP(&format, "format", "f", "txt", "Content format transformation (html, md, txt)")
 	rootCmd.Flags().StringVar(&urlFilter, "filter", "*", "Only include URLs matching this pattern (e.g., blog/*)")
+	rootCmd.Flags().DurationVar(&timeout, "timeout", 10*time.Second, "HTTP client timeout")
+	rootCmd.Flags().StringVar(&userAgent, "user-agent", "sitemapExport", "User-Agent header for HTTP requests")
 }
 
 // executeCrawlAndExport prompts the user for missing input (if flags are not provided), validates the inputs, and runs the main export logic.
@@ -94,6 +99,10 @@ func executeCrawlAndExport(cmd *cobra.Command, args []string) {
 		return
 	}
 	fmt.Print("\n")
+
+	// Apply HTTP client settings
+	crawler.Client.Timeout = timeout
+	crawler.SetUserAgent(userAgent)
 
 	// Step 1: Detect if it's an RSS feed or a Sitemap
 	feedType, err := feed.DetectFeedType(feedSource)
