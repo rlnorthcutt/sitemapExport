@@ -1,8 +1,8 @@
 # sitemapExport
 
-`sitemapExport` is a Go-based CLI tool that crawls a sitemap or RSS feed, extracts content from web pages using CSS selectors, and compiles the data into various formats such as `txt`, `json`, `jsonl`, `md`, and `pdf`.
+`sitemapExport` is a Go-based CLI tool that crawls a sitemap or RSS feed, extracts content from web pages using CSS selectors, and compiles the data into various formats such as `txt`, `json`, `jsonl`, and `md`.
 
-The primary use case is to extract content into a file that can be used as contextual data for AI. For example, extracting your docs site as a simple PDF to power a solid AI support chatbot ([tutorial here](https://community.appsmith.com/tutorial/4-easy-steps-build-ai-powered-support-bot-knows-your-docs)).
+The primary use case is to extract content into a file that can be used as contextual data for AI. For example, extracting your docs site as a structured text or JSON file to power a solid AI support chatbot ([tutorial here](https://community.appsmith.com/tutorial/4-easy-steps-build-ai-powered-support-bot-knows-your-docs)).
 
 ## Features
 
@@ -20,19 +20,17 @@ The primary use case is to extract content into a file that can be used as conte
   - JSON (`json`)
   - JSON Lines (`jsonl`)
   - Markdown (`md`)
-  - PDF (`pdf`)
+- Supports non-interactive usage via flags or environment variables.
 
 ## Installation
 
-### Easy : Run the command
-1. Just grab the [`sitemapExport`](https://github.com/rlnorthcutt/sitemapExport/releases/) file in the repo.
+### Easy: Run the binary
 
-2. Make the file executable, and run
+Grab the pre-built [`sitemapExport`](https://github.com/rlnorthcutt/sitemapExport/releases/) binary from the releases page, make it executable, and run it.
 
-Thats it. Each time the repo is updated, the executable is rebuilt. However, you can always build it from source if you choose.
+### Build from source
 
-### Fun : Build from source
-To build `sitemapExport`, you'll need [Go](https://golang.org/doc/install) installed.
+Requires [Go](https://golang.org/doc/install) 1.23 or later.
 
 1. Clone the repository:
    ```bash
@@ -40,143 +38,139 @@ To build `sitemapExport`, you'll need [Go](https://golang.org/doc/install) insta
    cd sitemapExport
    ```
 
-2. Build the CLI tool:
+2. Build the binary:
    ```bash
    go build
    ```
-   For a smaller binary, you can use:
+   For a smaller binary:
    ```bash
    go build -ldflags="-s -w"
    ```
 
-   This will generate the `sitemapExport` binary.
-
 ## Usage
 
-Once built, you can run the tool from the command line. The tool supports both interactive prompts and command-line flags.
+The tool supports interactive prompts, command-line flags, and environment variables. Flags take priority over environment variables, which take priority over interactive prompts.
 
-### Interactive Usage
+### Interactive
 
 ```bash
 ./sitemapExport
 ```
 
-### Example Interactive Prompts
+Example session:
 
-```bash
-$ ./sitemapExport
+```
 Enter the Sitemap or RSS feed URL or file path (required): https://example.com/sitemap.xml
 Enter the CSS selector to extract content (default: body):
-Enter the output filename (default: output): output
+Enter the output filename (default: output):
 Enter the URL filter pattern (default: *):
-Enter the output file type (txt, json, jsonl, md, pdf) (default: txt): jsonl
-Successfully saved output to output.jsonl
+Enter the output file type (txt, json, jsonl, md) (default: txt): jsonl
+
+Export data with the following settings:
+  Input:           https://example.com/sitemap.xml
+  CSS Selector:    body
+  URL Filter:      *
+  Output Filename: output
+  Output Filetype: jsonl
+  Format:          txt
+
+Do you want to proceed with these settings? (y/n): y
 ```
 
-This will crawl the provided sitemap, extract content from each page using the CSS selector, and save the output in the chosen format (`jsonl` in this case).
-
-### Command-Line Options (Non-Interactive)
-If you prefer to pass flags instead of interactive prompts, you can run:
+### Non-interactive (flags)
 
 ```bash
-./sitemapExport --input="https://example.com/sitemap.xml" --css="body" --filename="output" --type="txt" --filter="blog/*"
+./sitemapExport --input="https://example.com/sitemap.xml" --css="article" --filename="output" --type="jsonl" --filter="blog/*"
 ```
 
-Or, use the short flags:
+Short flags are also supported:
 
 ```bash
-./sitemapExport -i="https://example.com/sitemap.xml" -c="body" -n="output" -t="txt" --filter="blog/*"
+./sitemapExport -i "https://example.com/sitemap.xml" -c "article" -n "output" -t "jsonl"
 ```
 
-If exporting to PDF, you can also specify `--format` (html, md, txt) to control the content inside the PDF.
+### Flags
 
-### Supported Formats
+| Flag | Short | Default | Description |
+|---|---|---|---|
+| `--input` | `-i` | _(required)_ | Sitemap or RSS feed URL, or local file path |
+| `--css` | `-c` | `body` | CSS selector to extract content |
+| `--filename` | `-n` | `output` | Output filename (without extension) |
+| `--type` | `-t` | `txt` | Output format: `txt`, `json`, `jsonl`, `md` |
+| `--filter` | | `*` | Only include URLs matching this pattern (e.g., `blog/*`) |
+| `--verbose` | `-v` | `false` | Enable verbose output |
 
-- `txt`: Plain text format
-- `json`: JSON with pretty-printing
-- `jsonl`: JSON Lines format (one JSON object per line)
-- `md`: Markdown format
-- `pdf`: PDF format
+### Environment variables
 
-### Example Output
+All inputs can also be set via environment variables, which are checked when a flag is not explicitly provided:
 
-**JSON Output (`output.json`)**:
+| Variable | Corresponding flag |
+|---|---|
+| `SITEMAP_INPUT` | `--input` |
+| `SITEMAP_CSS` | `--css` |
+| `SITEMAP_FILENAME` | `--filename` |
+| `SITEMAP_TYPE` | `--type` |
+| `SITEMAP_FILTER` | `--filter` |
+
+### Output formats
+
+- `txt` — plain text, one page per section
+- `json` — pretty-printed JSON array
+- `jsonl` — one JSON object per line (ideal for AI ingestion pipelines)
+- `md` — Markdown with headings and content
+
+### Example output
+
+**JSON (`output.json`)**:
 ```json
 [
   {
     "Title": "Home",
     "URL": "https://example.com",
     "Description": "Welcome to our homepage",
-    "MetaTags": ["description: Welcome to our site"],
-    "Content": "<div>Welcome to our site!</div>"
+    "Content": "Welcome to our site!"
   },
   {
     "Title": "About Us",
     "URL": "https://example.com/about",
     "Description": "Learn more about our company",
-    "MetaTags": ["description: About Us"],
-    "Content": "<p>We are a company...</p>"
+    "Content": "We are a company..."
   }
 ]
 ```
 
-**Markdown Output (`output.md`)**:
-```markdown
-# Home
-
-URL: https://example.com
-
-Description: Welcome to our homepage
-
-<div>Welcome to our site!</div>
-
----
-
-# About Us
-
-URL: https://example.com/about
-
-Description: Learn more about our company
-
-<p>We are a company...</p>
-
----
+**JSON Lines (`output.jsonl`)**:
+```
+{"Title":"Home","URL":"https://example.com/","Description":"Welcome to our homepage","Content":"Welcome to our site!"}
+{"Title":"About Us","URL":"https://example.com/about","Description":"Learn more about our company","Content":"We are a company..."}
 ```
 
-**JSON Lines Output (`output.jsonl`)**:
-```jsonl
-{"Title":"Home","URL":"https://example.com/","Description":"Welcome to our homepage","MetaTags":["description: Welcome"],"Content":"<div>Welcome to our site!</div>"}
-{"Title":"About Us","URL":"https://example.com/about","Description":"Learn more about our company","MetaTags":["description: About Us"],"Content":"<p>We are a company...</p>"}
+## Project structure
+
 ```
-
-## Project Structure
-
-```bash
 sitemapExport/
-├── main.go           # CLI entry point
-├── crawler/          # Handles sitemap and RSS crawling and page extraction
+├── main.go           # CLI entry point, flag definitions, orchestration
+├── crawler/          # Sitemap and RSS crawling, page extraction
 │   └── crawler.go
-├── formatter/        # Formats extracted content into different file formats
+├── formatter/        # Formats extracted pages into output formats
 │   └── formatter.go
-├── writer/           # Writes formatted content to files (txt, json, md, pdf)
+├── writer/           # Writes formatted content to disk
 │   └── writer.go
-├── feed/             # Detects feed type and handles feed-related tasks
+├── feed/             # Feed type detection (sitemap vs RSS)
 │   └── feed.go
-├── go.mod            # Go module file with dependencies
-├── go.sum            # Go module dependency checksum
-└── README.md         # Project documentation
+├── html2text/        # HTML to plain text conversion
+│   └── html2text.go
+├── go.mod
+└── go.sum
 ```
 
 ## Dependencies
 
-`sitemapExport` uses the following Go packages:
-
-- [`github.com/PuerkitoBio/goquery`](https://github.com/PuerkitoBio/goquery) - For parsing and manipulating HTML documents.
-- [`github.com/kennygrant/sanitize`](https://github.com/kennygrant/sanitize) - For sanitizing HTML content.
-- [`github.com/spf13/cobra`](https://github.com/spf13/cobra) - For CLI command management.
-- [`github.com/jung-kurt/gofpdf`](https://github.com/jung-kurt/gofpdf) - For PDF generation.
-- [`github.com/JohannesKaufmann/html-to-markdown`](https://github.com/JohannesKaufmann/html-to-markdown) - For converting HTML to Markdown.
-- [`github.com/schollz/progressbar/v3`](https://github.com/schollz/progressbar) - For showing progress bars during sitemap and RSS crawling.
+- [`github.com/PuerkitoBio/goquery`](https://github.com/PuerkitoBio/goquery) — HTML parsing and CSS selector queries
+- [`github.com/JohannesKaufmann/html-to-markdown`](https://github.com/JohannesKaufmann/html-to-markdown) — HTML to Markdown conversion
+- [`github.com/spf13/pflag`](https://github.com/spf13/pflag) — CLI flag parsing with short and long flag support
+- [`fortio.org/progressbar`](https://github.com/fortio/progressbar) — Zero-dependency progress bar
+- [`github.com/rlnorthcutt/cmdkit`](https://github.com/rlnorthcutt/cmdkit) — Interactive prompts, env var resolution, and colored logging
 
 ## Contributing
 
@@ -185,4 +179,3 @@ Feel free to open issues or submit pull requests for new features, bug fixes, or
 ## License
 
 This project is licensed under the MIT License.
-

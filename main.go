@@ -18,7 +18,6 @@ var (
 	cssSelector    string
 	outputFilename string
 	outputFiletype string
-	format         string
 	urlFilter      string
 	verbose        bool
 )
@@ -27,8 +26,7 @@ func main() {
 	pflag.StringVarP(&feedSource, "input", "i", "", "Sitemap or RSS feed URL or file path to crawl (required)")
 	pflag.StringVarP(&cssSelector, "css", "c", "body", "CSS selector to extract content (for sitemaps)")
 	pflag.StringVarP(&outputFilename, "filename", "n", "output", "Filename for the output")
-	pflag.StringVarP(&outputFiletype, "type", "t", "txt", "File output format (txt, json, jsonl, md, pdf)")
-	pflag.StringVarP(&format, "format", "f", "txt", "Content format transformation (html, md, txt)")
+	pflag.StringVarP(&outputFiletype, "type", "t", "txt", "File output format (txt, json, jsonl, md)")
 	pflag.StringVar(&urlFilter, "filter", "*", "Only include URLs matching this pattern (e.g., blog/*)")
 	pflag.BoolVarP(&verbose, "verbose", "v", false, "Enable verbose output")
 	pflag.Parse()
@@ -51,25 +49,16 @@ func executeCrawlAndExport() {
 	u.ResolveString(cssSelector, pflag.CommandLine.Changed("css"), "SITEMAP_CSS", "Enter the CSS selector to extract content", &cssSelector)
 	u.ResolveString(outputFilename, pflag.CommandLine.Changed("filename"), "SITEMAP_FILENAME", "Enter the output filename", &outputFilename)
 	u.ResolveString(urlFilter, pflag.CommandLine.Changed("filter"), "SITEMAP_FILTER", "Enter the URL filter pattern", &urlFilter)
-	u.ResolveString(outputFiletype, pflag.CommandLine.Changed("type"), "SITEMAP_TYPE", "Enter the output file type (txt, json, jsonl, md, pdf)", &outputFiletype)
+	u.ResolveString(outputFiletype, pflag.CommandLine.Changed("type"), "SITEMAP_TYPE", "Enter the output file type (txt, json, jsonl, md)", &outputFiletype)
 
 	if !isValidOutputType(outputFiletype) {
 		log.Fatal("error validating output file type: unsupported type: %s", outputFiletype)
 	}
 
-	if strings.EqualFold(outputFiletype, "pdf") {
-		u.ResolveString(format, pflag.CommandLine.Changed("format"), "SITEMAP_FORMAT", "Enter the content format (html, md, txt)", &format)
-		if !isValidFormat(format) {
-			log.Fatal("error validating content format: unsupported format: %s", format)
-		}
-	} else {
-		// Automatically determine content format for non-PDF output types
-		switch strings.ToLower(outputFiletype) {
-		case "md":
-			format = "md"
-		default:
-			format = "txt"
-		}
+	// Automatically determine content format from output type
+	format := "txt"
+	if strings.EqualFold(outputFiletype, "md") {
+		format = "md"
 	}
 
 	// Confirm the input values with the user before proceeding
@@ -127,20 +116,9 @@ func executeCrawlAndExport() {
 
 // isValidOutputType checks if the provided output filetype is supported.
 func isValidOutputType(outputType string) bool {
-	supportedTypes := []string{"txt", "json", "jsonl", "md", "pdf"}
+	supportedTypes := []string{"txt", "json", "jsonl", "md"}
 	for _, t := range supportedTypes {
 		if strings.EqualFold(t, outputType) {
-			return true
-		}
-	}
-	return false
-}
-
-// isValidFormat checks if the provided content format transformation is supported.
-func isValidFormat(format string) bool {
-	supportedFormats := []string{"html", "md", "txt"}
-	for _, f := range supportedFormats {
-		if strings.EqualFold(f, format) {
 			return true
 		}
 	}

@@ -7,7 +7,7 @@ import (
 	"sitemapExport/crawler"
 )
 
-// FormatPages formats pages based on the selected format (json, jsonl, txt, md, pdf).
+// FormatPages formats pages based on the selected format (json, jsonl, txt, md).
 // It returns the formatted string or an error if the format is unsupported.
 func FormatPages(pages []crawler.Page, format string) (string, error) {
 	switch format {
@@ -15,7 +15,7 @@ func FormatPages(pages []crawler.Page, format string) (string, error) {
 		return formatJSON(pages)
 	case "jsonl":
 		return formatJSONLines(pages)
-	case "txt", "md", "pdf": // Text-based formats are handled together
+	case "txt", "md":
 		return formatTextBased(pages)
 	default:
 		return "", fmt.Errorf("unsupported format: %s", format)

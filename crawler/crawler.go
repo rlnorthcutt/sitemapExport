@@ -15,8 +15,9 @@ import (
 	md "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/JohannesKaufmann/html-to-markdown/plugin"
 	"github.com/PuerkitoBio/goquery"
-	"github.com/kennygrant/sanitize"
-	"github.com/schollz/progressbar/v3"
+	"fortio.org/progressbar"
+	xhtml "golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
 )
 
 // RSSItem represents an RSS item with relevant fields.
@@ -84,24 +85,24 @@ func CrawlSitemap(sitemapSource, cssSelector, format, filter string) ([]Page, er
 	totalURLs := urls.Length()
 
 	// Initialize the progress bar
-	bar := progressbar.NewOptions(totalURLs, progressbar.OptionSetDescription("Fetching sitemap pages"))
+	bar := progressbar.NewBar()
+	bar.UpdatePrefix("Fetching sitemap pages ")
 
 	// Extract each URL from the sitemap and crawl the page
 	urls.Each(func(i int, s *goquery.Selection) {
+		bar.Progress(100.0 * float64(i+1) / float64(totalURLs))
 		pageURL := s.Text()
 		if !matchesFilter(pageURL, filter) {
-			bar.Add(1)
 			return
 		}
 		page, err := extractPage(pageURL, cssSelector, format)
 		if err != nil {
 			fmt.Printf("Error extracting page %s: %v\n", pageURL, err)
-			bar.Add(1)
 			return
 		}
 		pages = append(pages, page)
-		bar.Add(1) // Increment the progress bar
 	})
+	bar.End()
 
 	return pages, nil
 }
@@ -141,31 +142,30 @@ func CrawlRSS(rssSource, cssSelector, format, filter string) ([]Page, error) {
 
 	// Initialize the progress bar
 	totalItems := len(rss.Items)
-	bar := progressbar.NewOptions(totalItems, progressbar.OptionSetDescription("Fetching RSS pages"))
+	bar := progressbar.NewBar()
+	bar.UpdatePrefix("Fetching RSS pages ")
 
 	// Process each RSS item
-	for _, item := range rss.Items {
+	for i, item := range rss.Items {
+		bar.Progress(100.0 * float64(i+1) / float64(totalItems))
 		if item.Link == "" {
 			fmt.Println("Error: RSS item missing URL. Skipping item.")
-			bar.Add(1)
 			continue
 		}
 		if !matchesFilter(item.Link, filter) {
-			bar.Add(1)
 			continue
 		}
 		page, err := extractPage(item.Link, cssSelector, format)
 		if err != nil {
 			fmt.Printf("Error extracting page %s: %v\n", item.Link, err)
-			bar.Add(1)
 			continue
 		}
 
 		// Set description from the RSS feed
 		page.Description = item.Description
 		pages = append(pages, page)
-		bar.Add(1) // Increment the progress bar
 	}
+	bar.End()
 
 	return pages, nil
 }
@@ -247,7 +247,7 @@ func extractAndTransformContent(doc *goquery.Document, cssSelector, format strin
 // extractAndTransformContentFromText transforms content into HTML, Markdown, or plain text format.
 func extractAndTransformContentFromText(content, format string) (string, error) {
 	decodedContent := html.UnescapeString(content)
-	sanitizedContent, _ := sanitize.HTMLAllowing(decodedContent, allowedTags, allowedAttributes)
+	sanitizedContent := htmlAllowing(decodedContent, allowedTags, allowedAttributes)
 
 	// Clean up excess newlines
 	sanitizedContent = removeExcessNewlines(sanitizedContent)
@@ -336,4 +336,77 @@ func matchesFilter(pageURL, filter string) bool {
 	filter = strings.TrimSuffix(filter, "*")
 	path := strings.TrimPrefix(parsed.Path, "/")
 	return strings.HasPrefix(path, filter)
+}
+
+// voidElements are HTML tags that have no closing tag and no children.
+var voidElements = map[string]bool{
+	"br": true, "hr": true, "img": true, "input": true,
+	"meta": true, "link": true, "area": true, "base": true,
+}
+
+// htmlAllowing parses the input HTML and returns a sanitized version containing
+// only the allowed tags and attributes. Disallowed tags are unwrapped (their
+// children are kept); disallowed attributes are silently dropped.
+func htmlAllowing(input string, allowedTags, allowedAttrs []string) string {
+	tagSet := make(map[string]bool, len(allowedTags))
+	for _, t := range allowedTags {
+		tagSet[t] = true
+	}
+	attrSet := make(map[string]bool, len(allowedAttrs))
+	for _, a := range allowedAttrs {
+		attrSet[a] = true
+	}
+
+	nodes, err := xhtml.ParseFragment(strings.NewReader(input), &xhtml.Node{
+		Type:     xhtml.ElementNode,
+		Data:     "body",
+		DataAtom: atom.Body,
+	})
+	if err != nil {
+		return input
+	}
+
+	var buf strings.Builder
+	for _, n := range nodes {
+		writeAllowedNode(n, tagSet, attrSet, &buf)
+	}
+	return buf.String()
+}
+
+// writeAllowedNode recursively writes a node to buf, respecting the tag and attribute allow-lists.
+func writeAllowedNode(n *xhtml.Node, tags, attrs map[string]bool, buf *strings.Builder) {
+	switch n.Type {
+	case xhtml.TextNode:
+		buf.WriteString(xhtml.EscapeString(n.Data))
+	case xhtml.ElementNode:
+		if tags[n.Data] {
+			buf.WriteString("<")
+			buf.WriteString(n.Data)
+			for _, a := range n.Attr {
+				if attrs[a.Key] {
+					buf.WriteString(` `)
+					buf.WriteString(a.Key)
+					buf.WriteString(`="`)
+					buf.WriteString(xhtml.EscapeString(a.Val))
+					buf.WriteString(`"`)
+				}
+			}
+			if voidElements[n.Data] {
+				buf.WriteString(">")
+				return
+			}
+			buf.WriteString(">")
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				writeAllowedNode(c, tags, attrs, buf)
+			}
+			buf.WriteString("</")
+			buf.WriteString(n.Data)
+			buf.WriteString(">")
+		} else {
+			// Unwrap: skip the tag but keep children
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				writeAllowedNode(c, tags, attrs, buf)
+			}
+		}
+	}
 }
